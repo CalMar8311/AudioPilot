@@ -33,12 +33,12 @@ export interface RemixDirection {
 export interface AudioAnalysisResult {
   detectedBpm: number;
   exactBpm?: number;
-  detectedKey: string;
+  detectedKey?: string;
   chordProgression?: string;
   chordSteps?: ChordStep[];
   harmonicVibe?: string;
-  vocalTimbre: string;
-  instrumentation: string[];
+  vocalTimbre?: string;
+  instrumentation?: string[];
   detectedGenre?: string;
   detectedMood?: string;
   remixDirections: RemixDirection[];

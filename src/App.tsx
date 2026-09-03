@@ -3,21 +3,12 @@ import { Sliders, FileText, Radio, Share2, Copy } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Toast } from '@/components/Toast';
 import { OutputPanel } from '@/components/OutputPanel';
-import { PresetVault } from '@/components/PresetVault';
 import { LicensingModal } from '@/components/LicensingModal';
-import { GenreSection } from '@/components/sections/GenreSection';
-import { ArtistArchetypeSection } from '@/components/sections/ArtistArchetypeSection';
-import { InstrumentsSection } from '@/components/sections/InstrumentsSection';
-import { VocalsSection } from '@/components/sections/VocalsSection';
-import { MoodTempoSection } from '@/components/sections/MoodTempoSection';
-import { NegativeTagsSection } from '@/components/sections/NegativeTagsSection';
-import { MusicalKeysSection } from '@/components/sections/MusicalKeysSection';
-import { ChordVoicingSection } from '@/components/sections/ChordVoicingSection';
+import { StyleStudio } from '@/components/StyleStudio';
+import { AudioRemixStudio } from '@/components/AudioRemixStudio';
 import { SoundEffectsSection } from '@/components/sections/SoundEffectsSection';
 import { SectionArrangementBuilder } from '@/components/sections/SectionArrangementBuilder';
-import { AudioUploadRemixSection } from '@/components/sections/AudioUploadRemixSection';
 import { LyricGeneratorSection } from '@/components/sections/LyricGeneratorSection';
-import { ProductionControlsSection } from '@/components/sections/ProductionControlsSection';
 import { normalizePromptState, usePromptEngine } from '@/engine/usePromptEngine';
 import { applySurpriseRecipeToState, pickRandomSurpriseRecipe } from '@/data/surpriseMe';
 import type { Preset } from '@/data/catalogs';
@@ -123,38 +114,21 @@ function App() {
 
         {/* Active Tab Panels — Kept mounted with CSS visibility for state persistence */}
         <main className="w-full">
-          {/* TAB 1: Audio Remix */}
+          {/* TAB 1: Audio Remix — Pure Remix Engine (No Side Outputs) */}
           <section className={activeTab === 'remix' ? 'space-y-6 block' : 'hidden'}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
-              <div className="lg:col-span-8 space-y-5 min-w-0">
-                <AudioUploadRemixSection eng={eng} onJumpToLyrics={() => setActiveTab('lyrics')} />
-              </div>
-
-              <div className="lg:col-span-4 space-y-4 sticky top-6 min-w-0">
-                <OutputPanel eng={eng} />
-              </div>
-            </div>
+            <AudioRemixStudio 
+              eng={eng} 
+              onJumpToLyrics={() => setActiveTab('lyrics')} 
+            />
           </section>
 
-          {/* TAB 2: Style & Presets — Preset Vault renders exclusively here */}
+          {/* TAB 2: Style & Presets — Organized with nested sub-tabs */}
           <section className={activeTab === 'style' ? 'space-y-6 block' : 'hidden'}>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
-              <div className="lg:col-span-8 space-y-5 min-w-0">
-                <GenreSection eng={eng} />
-                <ArtistArchetypeSection eng={eng} />
-                <InstrumentsSection eng={eng} />
-                <VocalsSection eng={eng} />
-                <MoodTempoSection eng={eng} />
-                <NegativeTagsSection eng={eng} />
-                <MusicalKeysSection eng={eng} />
-                <ChordVoicingSection eng={eng} />
-                <ProductionControlsSection eng={eng} onPresetSelect={handlePresetSelect} onEraSelect={handleEraSelect} />
-              </div>
-
-              <div className="lg:col-span-4 space-y-4 sticky top-6 min-w-0">
-                <PresetVault eng={eng} onPresetSelect={handlePresetSelect} />
-              </div>
-            </div>
+            <StyleStudio 
+              eng={eng} 
+              onPresetSelect={handlePresetSelect} 
+              onEraSelect={handleEraSelect}
+            />
           </section>
 
           {/* TAB 3: Lyric Canvas */}
@@ -186,8 +160,9 @@ function App() {
           </footer>
         </main>
       </div>
-      {/* Persistent Bottom Quick-Action Bar */}
-      <div className="fixed bottom-0 inset-x-0 z-40 bg-ink-950/90 border-t border-ink-700/60 backdrop-blur-lg px-4 py-2.5">
+      {/* Persistent Bottom Quick-Action Bar (Hidden on Tab 1: Audio Remix) */}
+      {activeTab !== 'remix' && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-ink-950/90 border-t border-ink-700/60 backdrop-blur-lg px-4 py-2.5">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xs text-ink-300 hidden sm:inline">Engine Target:</span>
@@ -221,7 +196,8 @@ function App() {
             </button>
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       <LicensingModal
         isOpen={isLicensingOpen}

@@ -204,6 +204,16 @@ input[type='range'].fx-range::-moz-range-thumb {
 .numeric {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 /* Chrome Extension Side Panel Responsive Styling (~380px width compact mode) */
 @media (max-width: 440px) {
@@ -252,5 +262,4 @@ input[type='range'].fx-range::-moz-range-thumb {
     font-size: 11px !important;
     padding: 0.35rem 0.6rem !important;
   }
-}
 }

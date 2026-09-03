@@ -1,8 +1,8 @@
 // Audio Upload & Remix Engine using Gemini Multimodal Audio API (gemini-2.5-flash)
 
 import { useState, useRef, ChangeEvent, DragEvent } from 'react';
-import { Upload, Music, RefreshCw, Copy, FileAudio, Trash2, Sparkles, Clock, Wand2, Zap, CheckCircle2, Sliders, Layers, Check, FileText } from 'lucide-react';
-import { SectionCard } from '@/components/ui';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { Upload, Music, RefreshCw, Copy, FileAudio, Trash2, Sparkles, Clock, Wand2, Zap, CheckCircle2, Sliders, Layers } from '@/components/ui';
 import { RemixDirectionCard } from '@/components/RemixDirectionCard';
 import { UploadedTrackBadgeCard } from '@/components/UploadedTrackBadgeCard';
 import { AudioMidiExtractorPanel } from '@/components/AudioMidiExtractorPanel';
@@ -12,16 +12,23 @@ import { cleanLyricText } from '@/engine/lyricEngine';
 import { detectBpmFromAudioFile, normalizeBpmWithRange, BpmDetectionRange } from '@/utils/bpmDetector';
 import type { PromptEngine, PromptSnapshot } from '@/engine/usePromptEngine';
 
-export function AudioUploadRemixSection({ eng, onJumpToLyrics }: { eng: PromptEngine; onJumpToLyrics?: () => void }) {
-  const {
-    state, update, showToast, addRecentPrompt, pushHistory, loadSnapshot,
-    recentPrompts, deleteRecentPrompt, stylePrompt, setSurpriseTheme, toggleArray, insertLyricTag,
-    audioState, setAudioFile, setAudioAnalysis, setAudioIsAnalyzing,
-    setSelectedDirectionId, setRerollCount
-  } = eng;
-
-  const { audioFile, audioUrl, isAnalyzing, analysis, selectedDirectionId, rerollCount } = audioState;
-
+export function AudioUploadRemixSection({
+  eng,
+  onJumpToLyrics,
+  activeSubTab = 'upload',
+}: {
+  eng: PromptEngine;
+  onJumpToLyrics?: () => void;
+  activeSubTab?: 'upload' | 'harmonics' | 'remix';
+}) {
+const { isRecording, recordingTime, startMicRecording, startSystemRecording, stopRecording } = useAudioRecorder();   
+  state,
+  update,
+  showToast,
+  addRecentPrompt,
+  pushHistory,
+  loadSnapshot,
+} = eng;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 

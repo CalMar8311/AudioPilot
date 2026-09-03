@@ -1,5 +1,6 @@
 import type { RemixDirection } from '@/services/geminiAudio';
 import { cleanLyricText } from '@/engine/lyricEngine';
+import { getGenreStructure } from '@/utils/songStructures';
 
 export interface RemixArchetype {
   id: string;
@@ -564,36 +565,59 @@ export function formatRemixLyrics(
 ): { lyrics: string; sectionTags: string[] } {
   const theme = arch.lyricTheme;
 
+  // Get genre-specific structure tags
+  const genreStructureTags = getGenreStructure(arch.genre);
+
   const lines: string[] = [];
 
-  // Intro
-  lines.push('[Intro]');
-  if (theme.intro) lines.push(theme.intro);
-  lines.push('');
+  // Use genre-specific structure tags or fallback to theme tags
+  if (genreStructureTags && genreStructureTags.length > 0) {
+    // Build lyrics using genre-specific structure
+    for (const tag of genreStructureTags) {
+      lines.push(tag);
+      
+      // Add content based on tag type
+      if (tag.toLowerCase().includes('intro') && theme.intro) {
+        lines.push(theme.intro);
+      } else if (tag.toLowerCase().includes('verse')) {
+        for (const vLine of theme.verses) {
+          lines.push(vLine);
+        }
+      } else if (tag.toLowerCase().includes('chorus') || tag.toLowerCase().includes('hook')) {
+        lines.push(theme.chorus);
+      } else if (tag.toLowerCase().includes('outro') || tag.toLowerCase().includes('end')) {
+        lines.push(theme.outro);
+      }
+      
+      lines.push('');
+    }
+  } else {
+    // Fallback to original structure
+    lines.push('[Intro]');
+    if (theme.intro) lines.push(theme.intro);
+    lines.push('');
 
-  // Verse
-  const verseTag = theme.sectionTags.find((t) => t.includes('Verse')) || '[Verse 1]';
-  lines.push(verseTag);
-  for (const vLine of theme.verses) {
-    lines.push(vLine);
+    const verseTag = theme.sectionTags.find((t) => t.includes('Verse')) || '[Verse 1]';
+    lines.push(verseTag);
+    for (const vLine of theme.verses) {
+      lines.push(vLine);
+    }
+    lines.push('');
+
+    const chorusTag = theme.sectionTags.find((t) => t.includes('Chorus')) || '[Chorus]';
+    lines.push(chorusTag);
+    lines.push(theme.chorus);
+    lines.push('');
+
+    const outroTag = theme.sectionTags.find((t) => t.includes('Outro')) || '[Outro]';
+    lines.push(outroTag);
+    lines.push(theme.outro);
   }
-  lines.push('');
-
-  // Chorus
-  const chorusTag = theme.sectionTags.find((t) => t.includes('Chorus')) || '[Chorus]';
-  lines.push(chorusTag);
-  lines.push(theme.chorus);
-  lines.push('');
-
-  // Outro
-  const outroTag = theme.sectionTags.find((t) => t.includes('Outro')) || '[Outro]';
-  lines.push(outroTag);
-  lines.push(theme.outro);
 
   const cleaned = cleanLyricText(lines.join('\n'));
 
   return {
     lyrics: cleaned,
-    sectionTags: ['[Intro]', '[Verse 1]', '[Chorus]', '[Outro]'],
+    sectionTags: genreStructureTags || ['[Intro]', '[Verse 1]', '[Chorus]', '[Outro]'],
   };
 }
