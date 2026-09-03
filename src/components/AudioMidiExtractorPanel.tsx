@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2 } from 'lucide-react';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import {
@@ -7,8 +7,18 @@ import {
 } from '@/engine/audioToMidiEngine';
 import { downloadMidiBlob, MidiNote } from '@/utils/midiEncoder';
 import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPreviewRow';
+import {
+  ENGINE_OFFLINE_MESSAGE,
+  separateStems,
+  type SeparatedStemUrls,
+} from '@/services/stemSeparation';
 
-const PREVIEW_STEM_NAMES = ['Vocals', 'Drums', 'Bass', 'Instruments'] as const;
+const STEM_DISPLAY: { id: keyof SeparatedStemUrls; name: string }[] = [
+  { id: 'vocals', name: 'Vocals' },
+  { id: 'drums', name: 'Drums' },
+  { id: 'bass', name: 'Bass' },
+  { id: 'other', name: 'Instruments' },
+];
 
 interface AudioMidiExtractorPanelProps {
   audioFile: File | null;
@@ -61,39 +71,73 @@ export function AudioMidiExtractorPanel({
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
   const [copiedSeq, setCopiedSeq] = useState(false);
   const [showFlGuide, setShowFlGuide] = useState(false);
+  const [isSeparating, setIsSeparating] = useState(false);
+  const [separateError, setSeparateError] = useState<string | null>(null);
+  const [previewStems, setPreviewStems] = useState<StemPreviewTrack[]>([]);
 
-  // Object URL for the uploaded reference track — used as inline stem preview source
-  // until a dedicated stem-separation backend is wired up.
-  const previewAudioUrl = useMemo(() => {
-    if (!audioFile) return null;
-    return URL.createObjectURL(audioFile);
-  }, [audioFile]);
-
+  // POST audio to local Demucs engine and map returned stem URLs into StemPreviewRow
   useEffect(() => {
-    return () => {
-      if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
-    };
-  }, [previewAudioUrl]);
+    if (!audioFile) {
+      setPreviewStems([]);
+      setSeparateError(null);
+      setIsSeparating(false);
+      return;
+    }
 
-  const previewStems: StemPreviewTrack[] = useMemo(() => {
-    if (!previewAudioUrl) return [];
-    return PREVIEW_STEM_NAMES.map((name) => ({
-      id: name.toLowerCase(),
-      name,
-      audioUrl: previewAudioUrl,
-    }));
-  }, [previewAudioUrl]);
+    let cancelled = false;
+
+    const runSeparation = async () => {
+      setIsSeparating(true);
+      setSeparateError(null);
+      setPreviewStems([]);
+
+      try {
+        const urls = await separateStems(audioFile);
+        if (cancelled) return;
+
+        setPreviewStems(
+          STEM_DISPLAY.map(({ id, name }) => ({
+            id,
+            name,
+            audioUrl: urls[id],
+          }))
+        );
+        onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
+      } catch (err) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error && err.message
+            ? err.message
+            : ENGINE_OFFLINE_MESSAGE;
+        // Network / offline failures always use the canonical offline message
+        const isOffline =
+          message === ENGINE_OFFLINE_MESSAGE ||
+          /Failed to fetch|NetworkError|ECONNREFUSED|fetch/i.test(message);
+        const userMessage = isOffline ? ENGINE_OFFLINE_MESSAGE : message;
+        setSeparateError(userMessage);
+        onShowToast(userMessage);
+      } finally {
+        if (!cancelled) setIsSeparating(false);
+      }
+    };
+
+    void runSeparation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [audioFile, onShowToast]);
 
   const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
-    const baseName = audioFile?.name.replace(/\.[^/.]+$/, '') || 'ReferenceTrack';
-    const extension = audioFile?.name.split('.').pop() || 'wav';
     const a = document.createElement('a');
     a.href = stem.audioUrl;
-    a.download = `${baseName}_${stem.name}.${extension}`;
+    a.download = `${stem.name.toLowerCase()}.wav`;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();
     a.remove();
-    onShowToast(`Downloaded ${stem.name} stem preview`);
+    onShowToast(`Downloading ${stem.name} stem…`);
   };
 
   const handleTranscribe = async () => {
@@ -184,24 +228,42 @@ export function AudioMidiExtractorPanel({
         </div>
       </div>
 
-      {/* Inline Stem Audio Previews */}
-      {previewStems.length > 0 && (
+      {/* Inline Stem Audio Previews (local Demucs engine) */}
+      {audioFile && (
         <div className="space-y-2">
           <label className="text-[10px] font-bold text-ink-300 uppercase tracking-wider flex items-center gap-1">
             <Volume2 className="w-3 h-3 text-neon-amber" /> Stem Previews
           </label>
-          <p className="text-[10px] text-ink-400 -mt-1">
-            Listen to separated stem layers inline. Use the download icon to save a stem preview file.
-          </p>
-          <div className="space-y-1.5">
-            {previewStems.map((stem) => (
-              <StemPreviewRow
-                key={stem.id}
-                stem={stem}
-                onDownload={handleDownloadStemPreview}
-              />
-            ))}
-          </div>
+
+          {isSeparating && (
+            <div className="flex items-center gap-2 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2.5 text-[11px] text-neon-amber font-semibold">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+              <span>Separating stems with AMD RX 6700 XT...</span>
+            </div>
+          )}
+
+          {separateError && !isSeparating && (
+            <div className="rounded-lg border border-neon-rose/40 bg-neon-rose/10 px-3 py-2.5 text-[11px] text-neon-rose">
+              {separateError}
+            </div>
+          )}
+
+          {!isSeparating && previewStems.length > 0 && (
+            <>
+              <p className="text-[10px] text-ink-400 -mt-1">
+                Listen to separated stem layers inline. Use the download icon to save a stem file.
+              </p>
+              <div className="space-y-1.5">
+                {previewStems.map((stem) => (
+                  <StemPreviewRow
+                    key={stem.id}
+                    stem={stem}
+                    onDownload={handleDownloadStemPreview}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
