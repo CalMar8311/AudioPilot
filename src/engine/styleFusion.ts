@@ -76,7 +76,7 @@ export function compileArtistBlendPrompt(ids: string[], primaryPct: number): str
 
   const cues = unique(parts.flatMap(p => p.item.performanceTags));
   const bpmBits = parts.map(p => {
-    const range = `${p.item.bpmMin}–${p.item.bpmTypical} BPM`;
+    const range = `${p.item.bpmMin}–${p.item.bpmMax} BPM`;
     return parts.length === 1
       ? `BPM pocket ${range}`
       : `${range} ${p.role} (${p.weight}%)`;

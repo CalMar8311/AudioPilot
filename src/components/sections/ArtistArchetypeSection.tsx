@@ -56,7 +56,7 @@ export function ArtistArchetypeSection({ eng }: { eng: PromptEngine }) {
                   {showBlend ? `${weights[i]}% ` : ''}{a.promptTags[0]}
                 </span>
                 <span className="text-ink-400"> — {a.promptTags.slice(1).join(', ')}</span>
-                <span className="text-ink-500"> · {a.bpmMin}–{a.bpmTypical} BPM</span>
+                <span className="text-ink-500"> · {a.bpmMin}–{a.bpmMax} BPM</span>
               </li>
             ))}
           </ul>

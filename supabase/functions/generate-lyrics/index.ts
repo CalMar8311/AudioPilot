@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-type RhymeScheme = "AABB" | "ABAB" | "AAAA" | "Free";
+type RhymeScheme = "AABB" | "ABAB" | "AAAA" | "ABCB" | "AABBCCDD" | "Complex" | "Free";
 type Tone = "poetic" | "direct" | "aggressive" | "nostalgic" | "playful";
 type Lang = "en" | "es" | "fr" | "ja" | "ar";
 
@@ -133,8 +133,8 @@ function buildSystemPrompt(req: GenerateRequest): string {
     }
   }
 
-  // Add archetype-specific directive examples
-  if (req.vocalArchetypes.length > 0) {
+  // Add legacy archetype-specific directive examples only when no fused style context is provided
+  if (req.vocalArchetypes.length > 0 && (!fused || fused.parts.length === 0)) {
     rules.push("");
     rules.push("Vocal Archetype Directives:");
     for (const arch of req.vocalArchetypes) {

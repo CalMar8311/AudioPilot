@@ -279,9 +279,9 @@ export function compileStylePrompt(s: PromptState): string {
     ['live-drums', 'acoustic-drums', 'acoustic-drum-kit', 'drum-kit', 'live-drum-kit'].includes(id),
   );
 
-  // Genres
-  const genreLabels = labelFor(s.genres, GENRES);
-  if (genreLabels.length) parts.push(genreLabels.join(', '));
+  // Genres with fusion blend weighting
+  const genreBlend = compileGenreBlendPrompt(s.genres, s.blend);
+  if (genreBlend) parts.push(genreBlend);
 
   // Subgenres
   if (s.subgenres.length) {
@@ -294,6 +294,10 @@ export function compileStylePrompt(s: PromptState): string {
     ].filter(Boolean);
     if (subgenrePrompt.length) parts.push(subgenrePrompt.join(', '));
   }
+
+  // Artist timbre / vocal archetype blend (acoustic descriptors only)
+  const artistBlend = compileArtistBlendPrompt(s.artistArchetypes, s.artistBlend);
+  if (artistBlend) parts.push(artistBlend);
 
   // Instruments
   const inst = labelFor(s.instruments, INSTRUMENTS);
