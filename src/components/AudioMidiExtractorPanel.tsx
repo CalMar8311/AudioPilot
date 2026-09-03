@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2 } from 'lucide-react';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import {
@@ -10,6 +10,7 @@ import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPr
 import {
   ENGINE_OFFLINE_MESSAGE,
   separateStems,
+  type StemTrack,
 } from '@/services/stemSeparation';
 
 interface AudioMidiExtractorPanelProps {
@@ -66,32 +67,35 @@ export function AudioMidiExtractorPanel({
   const [isSeparating, setIsSeparating] = useState(false);
   const [separateError, setSeparateError] = useState<string | null>(null);
   const [previewStems, setPreviewStems] = useState<StemPreviewTrack[]>([]);
-  const separateRequestId = useRef(0);
 
-  // POST audio to local Demucs engine; map data.stems into StemPreviewRow state
+  const fileKey = audioFile
+    ? `${audioFile.name}:${audioFile.size}:${audioFile.lastModified}`
+    : null;
+
+  // POST to local Demucs engine once per uploaded file; always clear loading in finally
   useEffect(() => {
-    if (!audioFile) {
-      separateRequestId.current += 1;
+    if (!audioFile || !fileKey) {
       setPreviewStems([]);
       setSeparateError(null);
       setIsSeparating(false);
       return;
     }
 
-    const requestId = ++separateRequestId.current;
+    const controller = new AbortController();
+    let active = true;
+
     setIsSeparating(true);
     setSeparateError(null);
     setPreviewStems([]);
 
     const runSeparation = async () => {
       try {
-        const { stems } = await separateStems(audioFile);
-        if (requestId !== separateRequestId.current) return;
-
-        setPreviewStems(stems);
+        const { stems } = await separateStems(audioFile, controller.signal);
+        if (!active) return;
+        setPreviewStems(stems as StemTrack[]);
         onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
       } catch (err) {
-        if (requestId !== separateRequestId.current) return;
+        if (!active || (err instanceof DOMException && err.name === 'AbortError')) return;
         const message =
           err instanceof Error && err.message
             ? err.message
@@ -103,15 +107,17 @@ export function AudioMidiExtractorPanel({
         setSeparateError(userMessage);
         onShowToast(userMessage);
       } finally {
-        // Always clear loading for this request if it is still the latest
-        if (requestId === separateRequestId.current) {
-          setIsSeparating(false);
-        }
+        if (active) setIsSeparating(false);
       }
     };
 
     void runSeparation();
-  }, [audioFile]); // eslint-disable-line react-hooks/exhaustive-deps -- avoid re-run on toast identity
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fileKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
     const a = document.createElement('a');

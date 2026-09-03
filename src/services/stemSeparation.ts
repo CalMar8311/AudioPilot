@@ -1,16 +1,20 @@
 /** Client for the local AudioPilot Demucs engine (http://127.0.0.1:8000). */
 
-import type { StemPreviewTrack } from '@/components/audio/StemPreviewRow';
-
 export const AUDIOPILOT_ENGINE_URL = 'http://127.0.0.1:8000';
 
 export const ENGINE_OFFLINE_MESSAGE =
   'Local AudioPilot engine offline. Ensure server.py is running on port 8000.';
 
-/** Canonical stem list returned by /api/separate */
+export type StemTrack = {
+  id: string;
+  name: string;
+  audioUrl: string;
+};
+
+/** Canonical result from /api/separate */
 export type SeparateStemsResult = {
   trackName: string;
-  stems: StemPreviewTrack[];
+  stems: StemTrack[];
 };
 
 /** Backend may return either the array shape or the legacy dict shape */
@@ -19,7 +23,7 @@ interface SeparateStemsResponse {
   status?: string;
   trackName?: string;
   track_id?: string;
-  stems?: StemPreviewTrack[] | Record<string, string>;
+  stems?: StemTrack[] | Record<string, string>;
   urls?: Record<string, string>;
 }
 
@@ -30,7 +34,7 @@ const STEM_LABELS: Record<string, string> = {
   other: 'Instruments',
 };
 
-function mapDictToStems(dict: Record<string, string>): StemPreviewTrack[] {
+function mapDictToStems(dict: Record<string, string>): StemTrack[] {
   const order = ['vocals', 'drums', 'bass', 'other'];
   const fromOrder = order
     .filter((id) => typeof dict[id] === 'string' && dict[id])
@@ -54,16 +58,16 @@ function mapDictToStems(dict: Record<string, string>): StemPreviewTrack[] {
 function normalizeStemsPayload(data: SeparateStemsResponse): SeparateStemsResult {
   const trackName = data.trackName || data.track_id || 'track';
 
-  // Preferred shape: { success, trackName, stems: [{ id, name, audioUrl }] }
+  // Preferred: { success, trackName, stems: [{ id, name, audioUrl }] }
   if (Array.isArray(data.stems)) {
     const stems = data.stems
       .filter(
-        (s): s is StemPreviewTrack =>
+        (s): s is StemTrack =>
           Boolean(s) &&
           typeof s === 'object' &&
-          typeof s.id === 'string' &&
-          typeof s.audioUrl === 'string' &&
-          s.audioUrl.length > 0
+          typeof (s as StemTrack).id === 'string' &&
+          typeof (s as StemTrack).audioUrl === 'string' &&
+          (s as StemTrack).audioUrl.length > 0
       )
       .map((s) => ({
         id: s.id,
@@ -77,23 +81,26 @@ function normalizeStemsPayload(data: SeparateStemsResponse): SeparateStemsResult
     return { trackName, stems };
   }
 
-  // Legacy shape: { stems|urls: { vocals, drums, bass, other } }
+  // Legacy: { stems|urls: { vocals, drums, bass, other } }
   const dict =
     (data.urls && typeof data.urls === 'object' ? data.urls : null) ||
-    (data.stems && typeof data.stems === 'object' ? data.stems : null);
+    (data.stems && typeof data.stems === 'object' ? (data.stems as Record<string, string>) : null);
 
   if (!dict) {
     throw new Error('Stem separation response missing stem URLs');
   }
 
-  const stems = mapDictToStems(dict as Record<string, string>);
+  const stems = mapDictToStems(dict);
   if (stems.length === 0) {
     throw new Error('Stem separation response missing stem URLs');
   }
   return { trackName, stems };
 }
 
-export async function separateStems(file: File): Promise<SeparateStemsResult> {
+export async function separateStems(
+  file: File,
+  signal?: AbortSignal
+): Promise<SeparateStemsResult> {
   const form = new FormData();
   form.append('file', file, file.name);
 
@@ -102,8 +109,12 @@ export async function separateStems(file: File): Promise<SeparateStemsResult> {
     response = await fetch(`${AUDIOPILOT_ENGINE_URL}/api/separate`, {
       method: 'POST',
       body: form,
+      signal,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw err;
+    }
     throw new Error(ENGINE_OFFLINE_MESSAGE);
   }
 
