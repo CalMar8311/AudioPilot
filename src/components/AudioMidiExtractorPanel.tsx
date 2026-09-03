@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2 } from 'lucide-react';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import {
@@ -10,15 +10,7 @@ import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPr
 import {
   ENGINE_OFFLINE_MESSAGE,
   separateStems,
-  type SeparatedStemUrls,
 } from '@/services/stemSeparation';
-
-const STEM_DISPLAY: { id: keyof SeparatedStemUrls; name: string }[] = [
-  { id: 'vocals', name: 'Vocals' },
-  { id: 'drums', name: 'Drums' },
-  { id: 'bass', name: 'Bass' },
-  { id: 'other', name: 'Instruments' },
-];
 
 interface AudioMidiExtractorPanelProps {
   audioFile: File | null;
@@ -74,42 +66,36 @@ export function AudioMidiExtractorPanel({
   const [isSeparating, setIsSeparating] = useState(false);
   const [separateError, setSeparateError] = useState<string | null>(null);
   const [previewStems, setPreviewStems] = useState<StemPreviewTrack[]>([]);
+  const separateRequestId = useRef(0);
 
-  // POST audio to local Demucs engine and map returned stem URLs into StemPreviewRow
+  // POST audio to local Demucs engine; map data.stems into StemPreviewRow state
   useEffect(() => {
     if (!audioFile) {
+      separateRequestId.current += 1;
       setPreviewStems([]);
       setSeparateError(null);
       setIsSeparating(false);
       return;
     }
 
-    let cancelled = false;
+    const requestId = ++separateRequestId.current;
+    setIsSeparating(true);
+    setSeparateError(null);
+    setPreviewStems([]);
 
     const runSeparation = async () => {
-      setIsSeparating(true);
-      setSeparateError(null);
-      setPreviewStems([]);
-
       try {
-        const urls = await separateStems(audioFile);
-        if (cancelled) return;
+        const { stems } = await separateStems(audioFile);
+        if (requestId !== separateRequestId.current) return;
 
-        setPreviewStems(
-          STEM_DISPLAY.map(({ id, name }) => ({
-            id,
-            name,
-            audioUrl: urls[id],
-          }))
-        );
+        setPreviewStems(stems);
         onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
       } catch (err) {
-        if (cancelled) return;
+        if (requestId !== separateRequestId.current) return;
         const message =
           err instanceof Error && err.message
             ? err.message
             : ENGINE_OFFLINE_MESSAGE;
-        // Network / offline failures always use the canonical offline message
         const isOffline =
           message === ENGINE_OFFLINE_MESSAGE ||
           /Failed to fetch|NetworkError|ECONNREFUSED|fetch/i.test(message);
@@ -117,16 +103,15 @@ export function AudioMidiExtractorPanel({
         setSeparateError(userMessage);
         onShowToast(userMessage);
       } finally {
-        if (!cancelled) setIsSeparating(false);
+        // Always clear loading for this request if it is still the latest
+        if (requestId === separateRequestId.current) {
+          setIsSeparating(false);
+        }
       }
     };
 
     void runSeparation();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [audioFile, onShowToast]);
+  }, [audioFile]); // eslint-disable-line react-hooks/exhaustive-deps -- avoid re-run on toast identity
 
   const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
     const a = document.createElement('a');
@@ -255,11 +240,7 @@ export function AudioMidiExtractorPanel({
               </p>
               <div className="space-y-1.5">
                 {previewStems.map((stem) => (
-                  <StemPreviewRow
-                    key={stem.id}
-                    stem={stem}
-                    onDownload={handleDownloadStemPreview}
-                  />
+                  <StemPreviewRow key={stem.id} stem={stem} onDownload={handleDownloadStemPreview} />
                 ))}
               </div>
             </>
