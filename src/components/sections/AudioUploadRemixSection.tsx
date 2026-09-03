@@ -1,8 +1,8 @@
 // Audio Upload & Remix Engine using Gemini Multimodal Audio API (gemini-2.5-flash)
 
-import { useState, useRef, ChangeEvent, DragEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent, DragEvent } from 'react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { Upload, FileAudio, Wand2, Copy } from 'lucide-react';
+import { Upload, FileAudio, Wand2, Copy, Mic2, MonitorSpeaker, StopCircle, X } from 'lucide-react';
 import { SectionCard } from '@/components/ui';
 import { RemixDirectionCard } from '@/components/RemixDirectionCard';
 import { UploadedTrackBadgeCard } from '@/components/UploadedTrackBadgeCard';
@@ -21,7 +21,16 @@ export function AudioUploadRemixSection({
   onJumpToLyrics?: () => void;
   activeSubTab?: 'upload' | 'harmonics' | 'remix';
 }) {
-  useAudioRecorder(); // mic/system capture available for future wiring in this panel
+  const {
+    isRecording,
+    recordingType,
+    recordingTime,
+    startMicRecording,
+    startSystemRecording,
+    stopRecording,
+    cancelRecording,
+    error: recordingError,
+  } = useAudioRecorder();
   const {
     state,
     update,
@@ -44,6 +53,30 @@ export function AudioUploadRemixSection({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Surface mic/system-capture failures (permission denied, no audio track, etc.) as toasts
+  useEffect(() => {
+    if (recordingError) {
+      showToast(recordingError);
+    }
+  }, [recordingError, showToast]);
+
+  const formatRecordingTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const handleStopRecording = async () => {
+    const recordedSource = recordingType === 'system' ? 'system audio' : 'microphone';
+    const file = await stopRecording();
+    if (file) {
+      showToast(`Captured ${recordedSource} recording — analyzing reference track…`);
+      await processAudioFile(file);
+    } else {
+      showToast('No audio was captured from the recording.');
+    }
+  };
 
   const handleRerollRemixes = () => {
     if (!analysis) return;
@@ -287,8 +320,71 @@ export function AudioUploadRemixSection({
         {/* Hidden File Input always available for Replace Track */}
         <input ref={fileInputRef} type="file" accept="audio/mp3,audio/wav,audio/*" onChange={handleFileChange} className="hidden" />
 
+        {/* Mic / System Audio Recorder — record a reference take instead of uploading one */}
+        {!audioUrl && (
+          <div className="rounded-xl border border-ink-700/60 bg-ink-950/40 p-3">
+            {isRecording ? (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-rose opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-neon-rose" />
+                  </span>
+                  <span className="text-xs font-semibold text-ink-100">
+                    Recording {recordingType === 'system' ? 'system audio' : 'microphone'}… {formatRecordingTime(recordingTime)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStopRecording}
+                    className="btn btn-primary !py-1 !px-2.5 !text-xs flex items-center gap-1.5"
+                    title="Stop recording and analyze the captured audio"
+                  >
+                    <StopCircle className="w-3.5 h-3.5" />
+                    Stop &amp; Analyze
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelRecording}
+                    className="btn btn-ghost !py-1 !px-2 !text-xs border border-ink-700/60"
+                    title="Cancel recording without saving"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-[10px] uppercase tracking-widest text-ink-400 font-semibold">Or Record a Reference Take</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={startMicRecording}
+                    className="btn btn-ghost !py-1 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1.5 transition"
+                    title="Record from your microphone"
+                  >
+                    <Mic2 className="w-3.5 h-3.5" />
+                    Mic
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startSystemRecording}
+                    className="btn btn-ghost !py-1 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1.5 transition"
+                    title="Record system/tab audio (choose 'Share audio' in the browser prompt)"
+                  >
+                    <MonitorSpeaker className="w-3.5 h-3.5" />
+                    System Audio
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* File Dropzone or Uploaded Reference Track Card */}
         {!audioUrl ? (
+          !isRecording && (
           <div 
             onClick={() => fileInputRef.current?.click()}
             onDragOver={handleDragOver}
@@ -312,6 +408,7 @@ export function AudioUploadRemixSection({
               </div>
             </div>
           </div>
+          )
         ) : (
           <UploadedTrackBadgeCard
             fileName={audioFile?.name || 'Uploaded Reference Track'}
