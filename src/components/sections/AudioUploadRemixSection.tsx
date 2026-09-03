@@ -2,33 +2,46 @@
 
 import { useState, useRef, ChangeEvent, DragEvent } from 'react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { Upload, Music, RefreshCw, Copy, FileAudio, Trash2, Sparkles, Clock, Wand2, Zap, CheckCircle2, Sliders, Layers } from '@/components/ui';
+import { Upload, FileAudio, Wand2, Copy } from 'lucide-react';
+import { SectionCard } from '@/components/ui';
 import { RemixDirectionCard } from '@/components/RemixDirectionCard';
 import { UploadedTrackBadgeCard } from '@/components/UploadedTrackBadgeCard';
 import { AudioMidiExtractorPanel } from '@/components/AudioMidiExtractorPanel';
-import { analyzeAudioWithGemini, AudioAnalysisResult, RemixDirection } from '@/services/geminiAudio';
+import { analyzeAudioWithGemini, RemixDirection } from '@/services/geminiAudio';
 import { generateRemixDirections } from '@/engine/remixEngine';
 import { cleanLyricText } from '@/engine/lyricEngine';
 import { detectBpmFromAudioFile, normalizeBpmWithRange, BpmDetectionRange } from '@/utils/bpmDetector';
-import type { PromptEngine, PromptSnapshot } from '@/engine/usePromptEngine';
+import type { PromptEngine } from '@/engine/usePromptEngine';
 
 export function AudioUploadRemixSection({
   eng,
   onJumpToLyrics,
-  activeSubTab = 'upload',
 }: {
   eng: PromptEngine;
   onJumpToLyrics?: () => void;
   activeSubTab?: 'upload' | 'harmonics' | 'remix';
 }) {
-const { isRecording, recordingTime, startMicRecording, startSystemRecording, stopRecording } = useAudioRecorder();   
-  state,
-  update,
-  showToast,
-  addRecentPrompt,
-  pushHistory,
-  loadSnapshot,
-} = eng;
+  useAudioRecorder(); // mic/system capture available for future wiring in this panel
+  const {
+    state,
+    update,
+    toggleArray,
+    showToast,
+    addRecentPrompt,
+    pushHistory,
+    insertLyricTag,
+    setSurpriseTheme,
+    stylePrompt,
+    audioState,
+    setAudioFile,
+    setAudioAnalysis,
+    setAudioIsAnalyzing,
+    setSelectedDirectionId,
+    setRerollCount,
+  } = eng;
+
+  const { audioFile, audioUrl, isAnalyzing, analysis, selectedDirectionId, rerollCount } = audioState;
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -95,7 +108,9 @@ const { isRecording, recordingTime, startMicRecording, startSystemRecording, sto
   const applyAudioSignature = () => {
     if (!analysis) return;
     update('bpm', analysis.detectedBpm);
-    update('musicalKeys', [analysis.detectedKey]);
+    if (analysis.detectedKey) {
+      update('musicalKeys', [analysis.detectedKey]);
+    }
     if (analysis.vocalTimbre) {
       update('vocalTimbre', analysis.vocalTimbre);
     }
