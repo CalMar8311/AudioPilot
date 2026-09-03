@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { Download, Copy, Check, Activity, Music, Play, Volume2, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2 } from 'lucide-react';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import {
   STEM_OPTIONS, TIME_SEGMENT_OPTIONS, StemType, TimeSegment,
   transcribeAudioToMidi, transcribeAllStemsToMultiTrackMidi, TranscriptionResult
 } from '@/engine/audioToMidiEngine';
 import { downloadMidiBlob, MidiNote } from '@/utils/midiEncoder';
+import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPreviewRow';
+
+const PREVIEW_STEM_NAMES = ['Vocals', 'Drums', 'Bass', 'Instruments'] as const;
 
 interface AudioMidiExtractorPanelProps {
   audioFile: File | null;
@@ -58,6 +61,40 @@ export function AudioMidiExtractorPanel({
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
   const [copiedSeq, setCopiedSeq] = useState(false);
   const [showFlGuide, setShowFlGuide] = useState(false);
+
+  // Object URL for the uploaded reference track — used as inline stem preview source
+  // until a dedicated stem-separation backend is wired up.
+  const previewAudioUrl = useMemo(() => {
+    if (!audioFile) return null;
+    return URL.createObjectURL(audioFile);
+  }, [audioFile]);
+
+  useEffect(() => {
+    return () => {
+      if (previewAudioUrl) URL.revokeObjectURL(previewAudioUrl);
+    };
+  }, [previewAudioUrl]);
+
+  const previewStems: StemPreviewTrack[] = useMemo(() => {
+    if (!previewAudioUrl) return [];
+    return PREVIEW_STEM_NAMES.map((name) => ({
+      id: name.toLowerCase(),
+      name,
+      audioUrl: previewAudioUrl,
+    }));
+  }, [previewAudioUrl]);
+
+  const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
+    const baseName = audioFile?.name.replace(/\.[^/.]+$/, '') || 'ReferenceTrack';
+    const extension = audioFile?.name.split('.').pop() || 'wav';
+    const a = document.createElement('a');
+    a.href = stem.audioUrl;
+    a.download = `${baseName}_${stem.name}.${extension}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    onShowToast(`Downloaded ${stem.name} stem preview`);
+  };
 
   const handleTranscribe = async () => {
     setIsTranscribing(true);
@@ -147,6 +184,27 @@ export function AudioMidiExtractorPanel({
         </div>
       </div>
 
+      {/* Inline Stem Audio Previews */}
+      {previewStems.length > 0 && (
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold text-ink-300 uppercase tracking-wider flex items-center gap-1">
+            <Volume2 className="w-3 h-3 text-neon-amber" /> Stem Previews
+          </label>
+          <p className="text-[10px] text-ink-400 -mt-1">
+            Listen to separated stem layers inline. Use the download icon to save a stem preview file.
+          </p>
+          <div className="space-y-1.5">
+            {previewStems.map((stem) => (
+              <StemPreviewRow
+                key={stem.id}
+                stem={stem}
+                onDownload={handleDownloadStemPreview}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 1. Instrument Stem Selector */}
       <div className="space-y-1.5">
         <label className="text-[10px] font-bold text-ink-300 uppercase tracking-wider flex items-center gap-1">
@@ -177,7 +235,6 @@ export function AudioMidiExtractorPanel({
           })}
         </div>
       </div>
-      onInjectLyricTag(tag);
 
       {/* 2. Time Segment Selector */}
       <div className="space-y-1.5">
