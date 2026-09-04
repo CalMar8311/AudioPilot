@@ -10,7 +10,6 @@ import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPr
 import {
   ENGINE_OFFLINE_MESSAGE,
   separateStems,
-  type StemTrack,
 } from '@/services/stemSeparation';
 
 interface AudioMidiExtractorPanelProps {
@@ -72,7 +71,7 @@ export function AudioMidiExtractorPanel({
     ? `${audioFile.name}:${audioFile.size}:${audioFile.lastModified}`
     : null;
 
-  // POST to local Demucs engine once per uploaded file; always clear loading in finally
+  // POST to local Demucs engine; always clear isSeparating in finally so the banner unmounts
   useEffect(() => {
     if (!audioFile || !fileKey) {
       setPreviewStems([]);
@@ -81,21 +80,20 @@ export function AudioMidiExtractorPanel({
       return;
     }
 
-    const controller = new AbortController();
-    let active = true;
-
-    setIsSeparating(true);
-    setSeparateError(null);
-    setPreviewStems([]);
+    let ignore = false;
 
     const runSeparation = async () => {
       try {
-        const { stems } = await separateStems(audioFile, controller.signal);
-        if (!active) return;
-        setPreviewStems(stems as StemTrack[]);
+        setIsSeparating(true);
+        setSeparateError(null);
+        const result = await separateStems(audioFile);
+        if (ignore) return;
+        setPreviewStems(result.stems);
         onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
       } catch (err) {
-        if (!active || (err instanceof DOMException && err.name === 'AbortError')) return;
+        console.error('Stem separation failed:', err);
+        if (ignore) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         const message =
           err instanceof Error && err.message
             ? err.message
@@ -107,15 +105,15 @@ export function AudioMidiExtractorPanel({
         setSeparateError(userMessage);
         onShowToast(userMessage);
       } finally {
-        if (active) setIsSeparating(false);
+        // MUST clear loading so the orange banner unmounts
+        setIsSeparating(false);
       }
     };
 
     void runSeparation();
 
     return () => {
-      active = false;
-      controller.abort();
+      ignore = true;
     };
   }, [fileKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -226,7 +224,7 @@ export function AudioMidiExtractorPanel({
             <Volume2 className="w-3 h-3 text-neon-amber" /> Stem Previews
           </label>
 
-          {isSeparating && (
+          {isSeparating === true && (
             <div className="flex items-center gap-2 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2.5 text-[11px] text-neon-amber font-semibold">
               <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
               <span>Separating stems with AMD RX 6700 XT...</span>
@@ -239,9 +237,9 @@ export function AudioMidiExtractorPanel({
             </div>
           )}
 
-          {!isSeparating && previewStems.length > 0 && (
+          {previewStems && previewStems.length > 0 && (
             <>
-              <p className="text-[10px] text-ink-400 -mt-1">
+              <p className="text-[10px] text-ink-400">
                 Listen to separated stem layers inline. Use the download icon to save a stem file.
               </p>
               <div className="space-y-1.5">
