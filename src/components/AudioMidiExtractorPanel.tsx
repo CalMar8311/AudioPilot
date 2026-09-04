@@ -9,7 +9,9 @@ import { downloadMidiBlob, MidiNote } from '@/utils/midiEncoder';
 import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPreviewRow';
 import {
   ENGINE_OFFLINE_MESSAGE,
-  separateStems,
+  fileKeyForAudio,
+  getCachedStems,
+  separateStemsForFile,
 } from '@/services/stemSeparation';
 
 interface AudioMidiExtractorPanelProps {
@@ -67,32 +69,39 @@ export function AudioMidiExtractorPanel({
   const [separateError, setSeparateError] = useState<string | null>(null);
   const [previewStems, setPreviewStems] = useState<StemPreviewTrack[]>([]);
 
-  const fileKey = audioFile
-    ? `${audioFile.name}:${audioFile.size}:${audioFile.lastModified}`
-    : null;
-
-  // POST to local Demucs engine; always clear isSeparating in finally so the banner unmounts
+  // POST to local Demucs engine; cache + finally so the orange banner always clears
   useEffect(() => {
-    if (!audioFile || !fileKey) {
+    if (!audioFile) {
       setPreviewStems([]);
       setSeparateError(null);
       setIsSeparating(false);
       return;
     }
 
-    let ignore = false;
+    const key = fileKeyForAudio(audioFile);
+    const cached = getCachedStems(key);
+    if (cached && cached.length > 0) {
+      setPreviewStems(cached);
+      setSeparateError(null);
+      setIsSeparating(false);
+      return;
+    }
+
+    let cancelled = false;
 
     const runSeparation = async () => {
       try {
         setIsSeparating(true);
         setSeparateError(null);
-        const result = await separateStems(audioFile);
-        if (ignore) return;
+        const result = await separateStemsForFile(audioFile);
+        // Always commit stems (shared cache survives Strict Mode remounts)
         setPreviewStems(result.stems);
-        onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
+        if (!cancelled) {
+          onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
+        }
       } catch (err) {
         console.error('Stem separation failed:', err);
-        if (ignore) return;
+        if (cancelled) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
         const message =
           err instanceof Error && err.message
@@ -105,7 +114,7 @@ export function AudioMidiExtractorPanel({
         setSeparateError(userMessage);
         onShowToast(userMessage);
       } finally {
-        // MUST clear loading so the orange banner unmounts
+        // MUST clear loading state so the banner unmounts
         setIsSeparating(false);
       }
     };
@@ -113,9 +122,9 @@ export function AudioMidiExtractorPanel({
     void runSeparation();
 
     return () => {
-      ignore = true;
+      cancelled = true;
     };
-  }, [fileKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [audioFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
     const a = document.createElement('a');
@@ -224,20 +233,20 @@ export function AudioMidiExtractorPanel({
             <Volume2 className="w-3 h-3 text-neon-amber" /> Stem Previews
           </label>
 
-          {isSeparating === true && (
+          {isSeparating && (
             <div className="flex items-center gap-2 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2.5 text-[11px] text-neon-amber font-semibold">
               <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
               <span>Separating stems with AMD RX 6700 XT...</span>
             </div>
           )}
 
-          {separateError && !isSeparating && (
+          {separateError && !isSeparating && previewStems.length === 0 && (
             <div className="rounded-lg border border-neon-rose/40 bg-neon-rose/10 px-3 py-2.5 text-[11px] text-neon-rose">
               {separateError}
             </div>
           )}
 
-          {previewStems && previewStems.length > 0 && (
+          {previewStems.length > 0 && (
             <>
               <p className="text-[10px] text-ink-400">
                 Listen to separated stem layers inline. Use the download icon to save a stem file.

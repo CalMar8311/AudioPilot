@@ -34,6 +34,18 @@ const STEM_LABELS: Record<string, string> = {
   other: 'Instruments',
 };
 
+/** Persist successful separations across Strict Mode remounts */
+const stemCache = new Map<string, StemTrack[]>();
+const stemInflight = new Map<string, Promise<SeparateStemsResult>>();
+
+export function fileKeyForAudio(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+export function getCachedStems(fileKey: string): StemTrack[] | null {
+  return stemCache.get(fileKey) ?? null;
+}
+
 function mapDictToStems(dict: Record<string, string>): StemTrack[] {
   const order = ['vocals', 'drums', 'bass', 'other'];
   const fromOrder = order
@@ -58,7 +70,6 @@ function mapDictToStems(dict: Record<string, string>): StemTrack[] {
 function normalizeStemsPayload(data: SeparateStemsResponse): SeparateStemsResult {
   const trackName = data.trackName || data.track_id || 'track';
 
-  // Preferred: { success, trackName, stems: [{ id, name, audioUrl }] }
   if (Array.isArray(data.stems)) {
     const stems = data.stems
       .filter(
@@ -81,7 +92,6 @@ function normalizeStemsPayload(data: SeparateStemsResponse): SeparateStemsResult
     return { trackName, stems };
   }
 
-  // Legacy: { stems|urls: { vocals, drums, bass, other } }
   const dict =
     (data.urls && typeof data.urls === 'object' ? data.urls : null) ||
     (data.stems && typeof data.stems === 'object' ? (data.stems as Record<string, string>) : null);
@@ -131,4 +141,39 @@ export async function separateStems(
 
   const data = (await response.json()) as SeparateStemsResponse;
   return normalizeStemsPayload(data);
+}
+
+/**
+ * Deduped separation: reuses cache / in-flight promise for the same file key
+ * so React Strict Mode double-mount does not leave the UI stuck waiting on a
+ * discarded request while a second Demucs job is still queued.
+ */
+export async function separateStemsForFile(
+  file: File,
+  signal?: AbortSignal
+): Promise<SeparateStemsResult> {
+  const key = fileKeyForAudio(file);
+  const cached = stemCache.get(key);
+  if (cached && cached.length > 0) {
+    return { trackName: key, stems: cached };
+  }
+
+  const existing = stemInflight.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = separateStems(file, signal)
+    .then((result) => {
+      stemCache.set(key, result.stems);
+      stemInflight.delete(key);
+      return result;
+    })
+    .catch((err) => {
+      stemInflight.delete(key);
+      throw err;
+    });
+
+  stemInflight.set(key, promise);
+  return promise;
 }

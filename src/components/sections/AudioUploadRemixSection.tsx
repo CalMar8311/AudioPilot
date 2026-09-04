@@ -16,6 +16,7 @@ import type { PromptEngine } from '@/engine/usePromptEngine';
 export function AudioUploadRemixSection({
   eng,
   onJumpToLyrics,
+  activeSubTab = 'upload',
 }: {
   eng: PromptEngine;
   onJumpToLyrics?: () => void;
@@ -314,191 +315,232 @@ export function AudioUploadRemixSection({
     <SectionCard title="Audio Reference & Remix Engine" icon={<FileAudio className="w-4 h-4" />} accent="cyan">
       <div className="space-y-5">
         <p className="text-[11px] text-ink-400">
-          Upload reference audio (.mp3, .wav) to analyze acoustic characteristics (BPM, Key, Vocal Timbre, Instrumentation, Core Mood) and generate 3 interactive Suno remix direction cards.
+          {activeSubTab === 'upload' &&
+            'Upload or record reference audio (.mp3, .wav) to analyze acoustic characteristics (BPM, Key, Vocal Timbre, Instrumentation, Core Mood).'}
+          {activeSubTab === 'harmonics' &&
+            'Inspect detected key, BPM, chord steps, and harmonic movement from your uploaded reference track.'}
+          {activeSubTab === 'remix' &&
+            'Separate stems, extract MIDI, and apply interactive Suno remix direction cards to your studio builder.'}
         </p>
 
         {/* Hidden File Input always available for Replace Track */}
         <input ref={fileInputRef} type="file" accept="audio/mp3,audio/wav,audio/*" onChange={handleFileChange} className="hidden" />
 
-        {/* Mic / System Audio Recorder — record a reference take instead of uploading one */}
-        {!audioUrl && (
-          <div className="rounded-xl border border-ink-700/60 bg-ink-950/40 p-3">
-            {isRecording ? (
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-rose opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-neon-rose" />
-                  </span>
-                  <span className="text-xs font-semibold text-ink-100">
-                    Recording {recordingType === 'system' ? 'system audio' : 'microphone'}… {formatRecordingTime(recordingTime)}
-                  </span>
+        {/* —— Upload tab: recorder + dropzone / track badge —— */}
+        {activeSubTab === 'upload' && (
+          <>
+            {!audioUrl && (
+              <div className="rounded-xl border border-ink-700/60 bg-ink-950/40 p-3">
+                {isRecording ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-rose opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-neon-rose" />
+                      </span>
+                      <span className="text-xs font-semibold text-ink-100">
+                        Recording {recordingType === 'system' ? 'system audio' : 'microphone'}… {formatRecordingTime(recordingTime)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleStopRecording}
+                        className="btn btn-primary !py-1 !px-2.5 !text-xs flex items-center gap-1.5"
+                        title="Stop recording and analyze the captured audio"
+                      >
+                        <StopCircle className="w-3.5 h-3.5" />
+                        Stop &amp; Analyze
+                      </button>
+                      <button
+                        type="button"
+                        onClick={cancelRecording}
+                        className="btn btn-ghost !py-1 !px-2 !text-xs border border-ink-700/60"
+                        title="Cancel recording without saving"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-[10px] uppercase tracking-widest text-ink-400 font-semibold">Or Record a Reference Take</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={startMicRecording}
+                        className="btn btn-ghost !py-1 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1.5 transition"
+                        title="Record from your microphone"
+                      >
+                        <Mic2 className="w-3.5 h-3.5" />
+                        Mic
+                      </button>
+                      <button
+                        type="button"
+                        onClick={startSystemRecording}
+                        className="btn btn-ghost !py-1 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1.5 transition"
+                        title="Record system/tab audio (choose 'Share audio' in the browser prompt)"
+                      >
+                        <MonitorSpeaker className="w-3.5 h-3.5" />
+                        System Audio
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!audioUrl ? (
+              !isRecording && (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all group ${
+                    isDragging
+                      ? 'border-neon-cyan bg-neon-cyan/10 scale-[1.01]'
+                      : 'border-ink-700/70 hover:border-neon-cyan/60 bg-ink-950/40 hover:bg-neon-cyan/5'
+                  }`}
+                >
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-10 h-10 rounded-full bg-neon-cyan/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Upload className="w-5 h-5 text-neon-cyan" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-ink-100">
+                        Drag &amp; Drop audio reference track (.mp3, .wav) or click to browse
+                      </p>
+                      <p className="text-[10px] text-ink-400 mt-0.5">Supports MP3 and WAV files</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleStopRecording}
-                    className="btn btn-primary !py-1 !px-2.5 !text-xs flex items-center gap-1.5"
-                    title="Stop recording and analyze the captured audio"
-                  >
-                    <StopCircle className="w-3.5 h-3.5" />
-                    Stop &amp; Analyze
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelRecording}
-                    className="btn btn-ghost !py-1 !px-2 !text-xs border border-ink-700/60"
-                    title="Cancel recording without saving"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+              )
+            ) : (
+              <UploadedTrackBadgeCard
+                fileName={audioFile?.name || 'Uploaded Reference Track'}
+                fileSize={audioFile?.size || 0}
+                audioUrl={audioUrl}
+                isAnalyzing={isAnalyzing}
+                analysis={analysis}
+                onReplace={handleReplaceTrack}
+                onRemove={handleRemoveTrack}
+                onApplySignature={applyAudioSignature}
+                onCopyChord={handleCopyChord}
+                onInjectHarmonicMovement={handleInjectHarmonicTag}
+                onUpdateBpm={handleUpdateBpm}
+                onUpdateBpmRange={handleUpdateBpmRange}
+              />
+            )}
+          </>
+        )}
+
+        {/* —— Harmonics tab: harmonic map / detection from uploaded track —— */}
+        {activeSubTab === 'harmonics' && (
+          <>
+            {!audioUrl ? (
+              <div className="rounded-xl border border-dashed border-ink-700/70 bg-ink-950/40 p-5 text-center">
+                <p className="text-xs text-ink-300">Upload a reference track in the <span className="text-neon-cyan font-semibold">Audio Upload</span> tab to view harmonic detection.</p>
               </div>
             ) : (
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <p className="text-[10px] uppercase tracking-widest text-ink-400 font-semibold">Or Record a Reference Take</p>
-                <div className="flex items-center gap-2">
+              <UploadedTrackBadgeCard
+                fileName={audioFile?.name || 'Uploaded Reference Track'}
+                fileSize={audioFile?.size || 0}
+                audioUrl={audioUrl}
+                isAnalyzing={isAnalyzing}
+                analysis={analysis}
+                onReplace={handleReplaceTrack}
+                onRemove={handleRemoveTrack}
+                onApplySignature={applyAudioSignature}
+                onCopyChord={handleCopyChord}
+                onInjectHarmonicMovement={handleInjectHarmonicTag}
+                onUpdateBpm={handleUpdateBpm}
+                onUpdateBpmRange={handleUpdateBpmRange}
+              />
+            )}
+          </>
+        )}
+
+        {/* —— Remix tab: stem separation, MIDI extract, remix cards, export —— */}
+        {activeSubTab === 'remix' && (
+          <>
+            {!audioFile ? (
+              <div className="rounded-xl border border-dashed border-ink-700/70 bg-ink-950/40 p-5 text-center">
+                <p className="text-xs text-ink-300">Upload a reference track in the <span className="text-neon-cyan font-semibold">Audio Upload</span> tab to open Remix Studio &amp; MIDI export.</p>
+              </div>
+            ) : (
+              <AudioMidiExtractorPanel
+                audioFile={audioFile}
+                analysis={analysis}
+                onShowToast={showToast}
+                onInjectLyricTag={insertLyricTag}
+              />
+            )}
+
+            {analysis && (
+              <div className="space-y-3 border-t border-ink-700/40 pt-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Wand2 className="w-4 h-4 text-neon-magenta" />
+                    <h4 className="text-xs font-bold text-ink-100 uppercase tracking-wider">
+                      3 Interactive Suno Remix Direction Cards
+                    </h4>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={startMicRecording}
-                    className="btn btn-ghost !py-1 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1.5 transition"
-                    title="Record from your microphone"
+                    onClick={handleRerollRemixes}
+                    className="btn btn-ghost !py-1 !px-2.5 !text-xs font-semibold border border-neon-cyan/40 hover:border-neon-cyan text-neon-cyan bg-neon-cyan/5 hover:bg-neon-cyan/15 flex items-center gap-1.5 transition rounded-lg shadow-sm"
+                    title="Generate 3 fresh remix concepts for this track"
                   >
-                    <Mic2 className="w-3.5 h-3.5" />
-                    Mic
+                    <span>🎲 Reroll Remixes</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={startSystemRecording}
-                    className="btn btn-ghost !py-1 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1.5 transition"
-                    title="Record system/tab audio (choose 'Share audio' in the browser prompt)"
-                  >
-                    <MonitorSpeaker className="w-3.5 h-3.5" />
-                    System Audio
-                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {analysis.remixDirections.map((dir, idx) => (
+                    <RemixDirectionCard
+                      key={dir.id}
+                      dir={dir}
+                      idx={idx}
+                      isSelected={selectedDirectionId === dir.id}
+                      onApply={handleApplyRemixDirection}
+                      onCopyStyle={copyCardStylePrompt}
+                      onCopyLyrics={copyCardLyricsAndTags}
+                      onJumpToLyrics={onJumpToLyrics}
+                      onInjectHarmonicMetatag={(dir) => handleInjectHarmonicTag(dir.harmonicMetatag || `[Harmonic Movement: ${dir.romanProgression || 'i - iv - VII - III'}]`)}
+                    />
+                  ))}
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* File Dropzone or Uploaded Reference Track Card */}
-        {!audioUrl ? (
-          !isRecording && (
-          <div 
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all group ${
-              isDragging
-                ? 'border-neon-cyan bg-neon-cyan/10 scale-[1.01]'
-                : 'border-ink-700/70 hover:border-neon-cyan/60 bg-ink-950/40 hover:bg-neon-cyan/5'
-            }`}
-          >
-            <div className="flex flex-col items-center justify-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-neon-cyan/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Upload className="w-5 h-5 text-neon-cyan" />
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-ink-100">
-                  Drag &amp; Drop audio reference track (.mp3, .wav) or click to browse
-                </p>
-                <p className="text-[10px] text-ink-400 mt-0.5">Supports MP3 and WAV files</p>
+            <div className="border-t border-ink-700/40 pt-3">
+              <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-2 font-semibold">One-Click Suno Export Actions</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={copyGlobalStylePrompt}
+                  className="btn btn-primary !py-2 !text-xs flex items-center justify-center gap-2"
+                  title="Copy compiled style prompt to clipboard"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy Active Style Prompt
+                </button>
+
+                <button
+                  type="button"
+                  onClick={copyGlobalLyricsAndTags}
+                  className="btn bg-gradient-to-r from-neon-magenta to-neon-rose text-ink-950 font-semibold hover:brightness-110 !py-2 !text-xs flex items-center justify-center gap-2"
+                  title="Copy lyrics with bracketed tags ([Intro], [Verse], [Chorus], [Outro]) to clipboard"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy Active Lyrics &amp; Tags
+                </button>
               </div>
             </div>
-          </div>
-          )
-        ) : (
-          <UploadedTrackBadgeCard
-            fileName={audioFile?.name || 'Uploaded Reference Track'}
-            fileSize={audioFile?.size || 0}
-            audioUrl={audioUrl}
-            isAnalyzing={isAnalyzing}
-            analysis={analysis}
-            onReplace={handleReplaceTrack}
-            onRemove={handleRemoveTrack}
-            onApplySignature={applyAudioSignature}
-            onCopyChord={handleCopyChord}
-            onInjectHarmonicMovement={handleInjectHarmonicTag}
-            onUpdateBpm={handleUpdateBpm}
-            onUpdateBpmRange={handleUpdateBpmRange}
-          />
+          </>
         )}
-
-        {/* FL Studio Audio-to-MIDI Stem Extractor Panel */}
-        {audioFile && (
-          <AudioMidiExtractorPanel
-            audioFile={audioFile}
-            analysis={analysis}
-            onShowToast={showToast}
-            onInjectLyricTag={insertLyricTag}
-          />
-        )}
-        {/* 3 Interactive Remix Direction Cards Section */}
-        {analysis && (
-          <div className="space-y-3 border-t border-ink-700/40 pt-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Wand2 className="w-4 h-4 text-neon-magenta" />
-                <h4 className="text-xs font-bold text-ink-100 uppercase tracking-wider">
-                  3 Interactive Suno Remix Direction Cards
-                </h4>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleRerollRemixes}
-                className="btn btn-ghost !py-1 !px-2.5 !text-xs font-semibold border border-neon-cyan/40 hover:border-neon-cyan text-neon-cyan bg-neon-cyan/5 hover:bg-neon-cyan/15 flex items-center gap-1.5 transition rounded-lg shadow-sm"
-                title="Generate 3 fresh remix concepts for this track"
-              >
-                <span>🎲 Reroll Remixes</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {analysis.remixDirections.map((dir, idx) => (
-                <RemixDirectionCard
-                  key={dir.id}
-                  dir={dir}
-                  idx={idx}
-                  isSelected={selectedDirectionId === dir.id}
-                  onApply={handleApplyRemixDirection}
-                  onCopyStyle={copyCardStylePrompt}
-                  onCopyLyrics={copyCardLyricsAndTags}
-                  onJumpToLyrics={onJumpToLyrics}
-                  onInjectHarmonicMetatag={(dir) => handleInjectHarmonicTag(dir.harmonicMetatag || `[Harmonic Movement: ${dir.romanProgression || 'i - iv - VII - III'}]`)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Global One-Click Suno Export Actions Bar */}
-        <div className="border-t border-ink-700/40 pt-3">
-          <p className="text-[10px] uppercase tracking-widest text-ink-400 mb-2 font-semibold">One-Click Suno Export Actions</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={copyGlobalStylePrompt}
-              className="btn btn-primary !py-2 !text-xs flex items-center justify-center gap-2"
-              title="Copy compiled style prompt to clipboard"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Copy Active Style Prompt
-            </button>
-
-            <button
-              type="button"
-              onClick={copyGlobalLyricsAndTags}
-              className="btn bg-gradient-to-r from-neon-magenta to-neon-rose text-ink-950 font-semibold hover:brightness-110 !py-2 !text-xs flex items-center justify-center gap-2"
-              title="Copy lyrics with bracketed tags ([Intro], [Verse], [Chorus], [Outro]) to clipboard"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Copy Active Lyrics &amp; Tags
-            </button>
-          </div>
-        </div>
       </div>
     </SectionCard>
   );
