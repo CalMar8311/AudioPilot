@@ -1,8 +1,9 @@
 // Folder-based playlist browser powered by the File System Access API.
 // Lets users pick a local music folder once, then search, preview, and step through
-// every .mp3 / .wav track sequentially without re-opening the folder picker.
+// every .mp3 / .wav track sequentially — via click, transport buttons, or the
+// keyboard's Up/Down arrows — without re-opening the folder picker.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FolderOpen, ListMusic, Search, SkipBack, SkipForward, PlayCircle, ArrowRightCircle } from 'lucide-react';
 
 interface PlaylistEntry {
@@ -30,14 +31,21 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Points at whichever track-list row is currently active so Up/Down arrow navigation can
+  // scroll it into view inside the scrollable list container.
+  const activeRowRef = useRef<HTMLButtonElement | null>(null);
 
   const isFileSystemAccessSupported =
     typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 
-  // Instant search — filters the loaded playlist by name. Next/Previous navigation and the
-  // rendered track list both traverse this filtered view, not the full unfiltered playlist.
-  const filteredPlaylist = playlist.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // Instant search — filters the loaded playlist by name. Next/Previous navigation, the
+  // keyboard Up/Down handler, and the rendered track list all traverse this filtered view,
+  // not the full unfiltered playlist. Memoized so its reference stays stable across renders
+  // unless the folder contents or search text actually change (both the keydown listener and
+  // the track-loading effect below depend on it).
+  const filteredPlaylist = useMemo(
+    () => playlist.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase())),
+    [playlist, searchQuery]
   );
 
   // Revoke the active object URL whenever it changes or the component unmounts.
@@ -69,25 +77,72 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
 
   const notify = (message: string) => onShowToast?.(message);
 
-  const loadTrackAtIndex = async (index: number, entries: PlaylistEntry[] = filteredPlaylist) => {
-    const entry = entries[index];
+  // Auto-Play & Preview on index change: whenever `currentIndex` (or the filtered list
+  // itself) changes — via click, transport buttons, or the Up/Down keyboard handler below —
+  // resolve that entry's file handle and load it into the audition audio element. Skips the
+  // reload when the resolved entry is already the loaded file (e.g. a search-driven index
+  // re-sync above) so playback isn't restarted from 0 for no reason.
+  useEffect(() => {
+    if (currentIndex < 0) return;
+    const entry = filteredPlaylist[currentIndex];
     if (!entry) return;
+    if (currentFile && entry.name === currentFile.name) return;
 
+    let cancelled = false;
     setIsLoadingTrack(true);
-    try {
-      const file = await entry.handle.getFile();
-      setCurrentTrackUrl((prevUrl) => {
-        if (prevUrl) URL.revokeObjectURL(prevUrl);
-        return URL.createObjectURL(file);
+
+    entry.handle
+      .getFile()
+      .then((file) => {
+        if (cancelled) return;
+        setCurrentTrackUrl((prevUrl) => {
+          if (prevUrl) URL.revokeObjectURL(prevUrl);
+          return URL.createObjectURL(file);
+        });
+        setCurrentFile(file);
+      })
+      .catch(() => {
+        if (!cancelled) notify(`Could not load "${entry.name}" — it may have been moved, renamed, or deleted.`);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingTrack(false);
       });
-      setCurrentFile(file);
-      setCurrentIndex(index);
-    } catch {
-      notify(`Could not load "${entry.name}" — it may have been moved, renamed, or deleted.`);
-    } finally {
-      setIsLoadingTrack(false);
-    }
-  };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentIndex, filteredPlaylist]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto Scroll Into View: keep the active row visible inside the scrollable list container
+  // as the user steps through the playlist with Up/Down or Next/Previous.
+  useEffect(() => {
+    activeRowRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [currentIndex]);
+
+  // Keyboard Up/Down navigation — listens on `window` so it works regardless of which
+  // element in this panel currently has focus, but bails out while the user is typing inside
+  // the search box (or any other text field) so arrow keys aren't hijacked from normal typing.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (!filteredPlaylist || filteredPlaylist.length === 0) return;
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault(); // Stop standard window scrolling
+        setCurrentIndex((prev) => (prev < filteredPlaylist.length - 1 ? prev + 1 : 0));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault(); // Stop standard window scrolling
+        setCurrentIndex((prev) => (prev > 0 ? prev - 1 : filteredPlaylist.length - 1));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredPlaylist, currentIndex]);
 
   const handleSelectFolder = async () => {
     if (!isFileSystemAccessSupported) {
@@ -133,20 +188,17 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
   };
 
   const handleSelectTrack = (index: number) => {
-    void loadTrackAtIndex(index);
+    setCurrentIndex(index);
   };
 
   const handleNext = () => {
     if (filteredPlaylist.length === 0) return;
-    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % filteredPlaylist.length;
-    void loadTrackAtIndex(nextIndex);
+    setCurrentIndex((prev) => (prev < filteredPlaylist.length - 1 ? prev + 1 : 0));
   };
 
   const handlePrevious = () => {
     if (filteredPlaylist.length === 0) return;
-    const prevIndex =
-      currentIndex < 0 ? filteredPlaylist.length - 1 : (currentIndex - 1 + filteredPlaylist.length) % filteredPlaylist.length;
-    void loadTrackAtIndex(prevIndex);
+    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : filteredPlaylist.length - 1));
   };
 
   // Auto-advance to the next track once the current one finishes playing.
@@ -187,7 +239,7 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
       {folderName && (
         <p className="text-[10px] text-ink-400 truncate">
           Folder: <span className="text-ink-200 font-semibold">{folderName}</span> · {playlist.length} track
-          {playlist.length === 1 ? '' : 's'}
+          {playlist.length === 1 ? '' : 's'} · <span className="text-ink-500">↑ / ↓ to navigate</span>
         </p>
       )}
 
@@ -224,26 +276,30 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
             </p>
           ) : (
             <div className="max-h-44 overflow-y-auto rounded-lg border border-ink-800/70 bg-ink-950/60 divide-y divide-ink-800/50">
-              {filteredPlaylist.map((entry, idx) => (
-                <button
-                  key={`${entry.name}-${idx}`}
-                  type="button"
-                  onClick={() => handleSelectTrack(idx)}
-                  className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[11px] transition ${
-                    idx === currentIndex
-                      ? 'bg-neon-cyan/15 text-neon-cyan'
-                      : 'text-ink-300 hover:bg-ink-800/50 hover:text-ink-100'
-                  }`}
-                  title={entry.name}
-                >
-                  {idx === currentIndex ? (
-                    <PlayCircle className="w-3.5 h-3.5 shrink-0 text-neon-cyan" />
-                  ) : (
-                    <span className="w-3.5 h-3.5 shrink-0 text-center text-[9px] text-ink-500 numeric">{idx + 1}</span>
-                  )}
-                  <span className="truncate">{entry.name}</span>
-                </button>
-              ))}
+              {filteredPlaylist.map((entry, idx) => {
+                const isActive = idx === currentIndex;
+                return (
+                  <button
+                    key={`${entry.name}-${idx}`}
+                    ref={isActive ? activeRowRef : undefined}
+                    type="button"
+                    onClick={() => handleSelectTrack(idx)}
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[11px] border transition ${
+                      isActive
+                        ? 'bg-cyan-500/20 border-cyan-500/50 text-neon-cyan'
+                        : 'border-transparent text-ink-300 hover:bg-ink-800/50 hover:text-ink-100'
+                    }`}
+                    title={entry.name}
+                  >
+                    {isActive ? (
+                      <PlayCircle className="w-3.5 h-3.5 shrink-0 text-neon-cyan" />
+                    ) : (
+                      <span className="w-3.5 h-3.5 shrink-0 text-center text-[9px] text-ink-500 numeric">{idx + 1}</span>
+                    )}
+                    <span className="truncate">{entry.name}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -254,7 +310,7 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
               onClick={handlePrevious}
               disabled={filteredPlaylist.length === 0 || isLoadingTrack}
               className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1 transition disabled:opacity-50"
-              title="Previous track"
+              title="Previous track (↑)"
             >
               <SkipBack className="w-3.5 h-3.5" />
             </button>
@@ -264,7 +320,7 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
               onClick={handleNext}
               disabled={filteredPlaylist.length === 0 || isLoadingTrack}
               className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1 transition disabled:opacity-50"
-              title="Next track"
+              title="Next track (↓)"
             >
               <SkipForward className="w-3.5 h-3.5" />
             </button>
