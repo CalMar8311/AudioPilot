@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2 } from 'lucide-react';
+import { useEffect, useState, type DragEvent } from 'react';
+import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2, GripVertical, Save } from 'lucide-react';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import {
   STEM_OPTIONS, TIME_SEGMENT_OPTIONS, StemType, TimeSegment,
@@ -12,6 +12,7 @@ import {
   fileKeyForAudio,
   getCachedStems,
   separateStemsForFile,
+  uploadMidiForDragDrop,
 } from '@/services/stemSeparation';
 
 interface AudioMidiExtractorPanelProps {
@@ -68,6 +69,9 @@ export function AudioMidiExtractorPanel({
   const [isSeparating, setIsSeparating] = useState(false);
   const [separateError, setSeparateError] = useState<string | null>(null);
   const [previewStems, setPreviewStems] = useState<StemPreviewTrack[]>([]);
+  const [midiBlobUrl, setMidiBlobUrl] = useState<string | null>(null);
+  const [midiHttpUrl, setMidiHttpUrl] = useState<string | null>(null);
+  const [isSavingMidi, setIsSavingMidi] = useState(false);
 
   // POST to local Demucs engine; cache + finally so the orange banner always clears
   useEffect(() => {
@@ -126,6 +130,46 @@ export function AudioMidiExtractorPanel({
     };
   }, [audioFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Rebuild an `audio/midi` Blob + object URL for the active transcription so it can be
+  // dragged directly into a DAW instead of forcing a file download. Revoked whenever the
+  // transcription changes or the component unmounts.
+  //
+  // We also opportunistically upload the same bytes to the local AudioPilot engine to get
+  // back a real absolute HTTP URL. Chromium's OS-level "DownloadURL" drag can be flaky with
+  // browser-internal `blob:` URIs once the drop target is a native app (e.g. FL Studio) —
+  // an `http://127.0.0.1:8000/...` URL is far more reliably resolved outside the browser.
+  // If the engine is offline or the endpoint is unavailable, this silently no-ops and the
+  // `blob:` URL below remains the drag fallback.
+  useEffect(() => {
+    if (!transcription) {
+      setMidiBlobUrl(null);
+      setMidiHttpUrl(null);
+      return;
+    }
+
+    const blob = new Blob([transcription.midiData.buffer as ArrayBuffer], { type: 'audio/midi' });
+    const url = URL.createObjectURL(blob);
+    setMidiBlobUrl(url);
+    setMidiHttpUrl(null);
+
+    let cancelled = false;
+    const baseName = audioFile?.name.replace(/\.[^/.]+$/, '') || 'ReferenceTrack';
+    const fileName = `${baseName}_${transcription.stem}_Extracted.mid`;
+
+    uploadMidiForDragDrop(transcription.midiData, fileName)
+      .then((httpUrl) => {
+        if (!cancelled) setMidiHttpUrl(httpUrl);
+      })
+      .catch(() => {
+        // Local engine offline / endpoint unavailable — blob: URL fallback stays active.
+      });
+
+    return () => {
+      cancelled = true;
+      URL.revokeObjectURL(url);
+    };
+  }, [transcription]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
     const a = document.createElement('a');
     a.href = stem.audioUrl;
@@ -179,6 +223,59 @@ export function AudioMidiExtractorPanel({
     const filename = `${baseName}_${transcription.stem}_Extracted.mid`;
     downloadMidiBlob(transcription.midiData, filename);
     onShowToast(`Downloaded ${filename} for FL Studio Piano Roll!`);
+  };
+
+  // Stable base name for the active transcription, reused for the download filename,
+  // the drag-to-DAW payload, and the Save-to-folder fallback below.
+  const stemName = transcription
+    ? `${(audioFile?.name.replace(/\.[^/.]+$/, '') || 'ReferenceTrack')}_${transcription.stem}_Extracted`
+    : null;
+
+  const handleMidiDragStart = (e: DragEvent<HTMLButtonElement>) => {
+    // Prefer a real absolute HTTP URL from the local engine when we have one — it resolves
+    // reliably outside the browser process. Fall back to the blob: object URL otherwise.
+    const downloadUrl = midiHttpUrl || midiBlobUrl;
+    if (!downloadUrl) {
+      e.preventDefault();
+      onShowToast('MIDI is still preparing — try the drag again in a moment.');
+      return;
+    }
+    const fileName = `${stemName || 'extracted_melody'}.mid`;
+    // Exact Chromium-recognized synthetic MIME string for native OS drag-and-drop.
+    const payload = `audio/midi:${fileName}:${downloadUrl}`;
+    e.dataTransfer.setData('DownloadURL', payload);
+    // Fallback types some DAWs / drop targets read instead of DownloadURL.
+    e.dataTransfer.setData('text/plain', fileName);
+    e.dataTransfer.effectAllowed = 'copy';
+    onShowToast('Drop the MIDI onto your DAW window to import it directly!');
+  };
+
+  const handleSaveMidiToFolder = async () => {
+    if (!transcription) return;
+    const fileName = `${stemName || 'extracted_melody'}.mid`;
+
+    if (typeof window.showSaveFilePicker === 'function') {
+      setIsSavingMidi(true);
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: 'MIDI File', accept: { 'audio/midi': ['.mid'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(transcription.midiData.buffer as ArrayBuffer);
+        await writable.close();
+        onShowToast(`Saved ${fileName} — drag it from your file explorer if in-browser drag is blocked.`);
+        return;
+      } catch (err) {
+        if ((err as DOMException)?.name === 'AbortError') return; // User cancelled the picker.
+        // Fall through to a direct download below (e.g. permission/UAC denied the save).
+      } finally {
+        setIsSavingMidi(false);
+      }
+    }
+
+    downloadMidiBlob(transcription.midiData, fileName);
+    onShowToast(`Downloaded ${fileName} — drag it from your Downloads folder into the DAW.`);
   };
 
   const handleCopySequence = async () => {
@@ -400,21 +497,50 @@ export function AudioMidiExtractorPanel({
           </div>
 
           {/* Action Buttons for FL Studio & DAW Workflow */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleDownloadMidi}
-              className="btn bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold !py-1.5 !px-2.5 !text-[11px] flex items-center justify-center gap-1.5 rounded-lg shadow-md"
-              title="Download single stem .MID file for FL Studio Piano Roll"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Stem .MID (FL Studio)</span>
-            </button>
+          <div className="space-y-2 pt-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleDownloadMidi}
+                className="flex-1 min-w-[140px] btn bg-orange-500 hover:bg-orange-400 text-slate-950 font-bold !py-1.5 !px-2.5 !text-[11px] flex items-center justify-center gap-1.5 rounded-lg shadow-md"
+                title="Download single stem .MID file for FL Studio Piano Roll"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Stem .MID (FL Studio)</span>
+              </button>
+
+              <button
+                type="button"
+                draggable={true}
+                onDragStart={handleMidiDragStart}
+                disabled={!midiBlobUrl && !midiHttpUrl}
+                className="shrink-0 btn bg-ink-900 hover:bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan font-bold !py-1.5 !px-2.5 !text-[11px] flex items-center justify-center gap-1 rounded-lg cursor-grab active:cursor-grabbing select-none disabled:opacity-50 disabled:cursor-not-allowed"
+                title={
+                  midiHttpUrl
+                    ? 'Drag this MIDI clip directly into your DAW (FL Studio, Ableton, Logic) via the local engine URL'
+                    : 'Drag this MIDI clip directly into your DAW (FL Studio, Ableton, Logic) — no download needed'
+                }
+              >
+                <GripVertical className="w-3.5 h-3.5" />
+                <span>Drag MIDI to DAW</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { void handleSaveMidiToFolder(); }}
+                disabled={isSavingMidi}
+                className="shrink-0 btn btn-ghost !py-1.5 !px-2.5 !text-[11px] border border-ink-700/70 hover:border-neon-emerald/60 text-ink-200 hover:text-neon-emerald flex items-center justify-center gap-1.5 disabled:opacity-60"
+                title="Fallback if drag-and-drop is blocked by Windows privilege isolation / UAC — saves the .MID directly"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingMidi ? 'Saving…' : 'Save to Project / Temp Folder'}</span>
+              </button>
+            </div>
 
             <button
               type="button"
               onClick={handleDownloadMultiTrackBundle}
-              className="btn bg-gradient-to-r from-neon-amber to-orange-400 text-slate-950 font-extrabold !py-1.5 !px-2.5 !text-[11px] flex items-center justify-center gap-1.5 rounded-lg shadow-glow"
+              className="w-full btn bg-gradient-to-r from-neon-amber to-orange-400 text-slate-950 font-extrabold !py-1.5 !px-2.5 !text-[11px] flex items-center justify-center gap-1.5 rounded-lg shadow-glow"
               title="Download multi-track bundle (Keys, Bass, Lead, Strings, Drums + Section Markers) for FL Studio"
             >
               <FolderDown className="w-3.5 h-3.5" />
