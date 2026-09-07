@@ -452,7 +452,7 @@ export function AudioUploadRemixSection({
             {currentTab === 'harmonics' &&
               'Inspect detected key, BPM, chord steps, and harmonic movement from your uploaded reference track.'}
             {currentTab === 'remix' &&
-              'Separate stems, extract MIDI, and apply interactive Suno remix direction cards to your studio builder.'}
+              'Extract MIDI, split it into Lead/Chords/Bass instrument layers, and apply interactive Suno remix direction cards to your studio builder.'}
           </p>
 
           {/* Hidden File Input always available for Replace Track */}

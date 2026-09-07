@@ -1,19 +1,16 @@
-import { useEffect, useState, type DragEvent } from 'react';
-import { Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2, FileCode, Volume2, GripVertical, Save } from 'lucide-react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
+import {
+  Download, Copy, Check, Activity, Music, Play, FolderDown, Info, Layers, Clock, RefreshCw, Wand2,
+  FileCode, GripVertical, Save, Guitar, Piano, Waves, HardDriveDownload,
+} from 'lucide-react';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import {
   STEM_OPTIONS, TIME_SEGMENT_OPTIONS, StemType, TimeSegment,
-  transcribeAudioToMidi, transcribeAllStemsToMultiTrackMidi, TranscriptionResult
+  transcribeAudioToMidi, transcribeAllStemsToMultiTrackMidi, TranscriptionResult,
+  splitTranscriptionIntoInstrumentLayers, InstrumentLayerSplitResult,
 } from '@/engine/audioToMidiEngine';
 import { downloadMidiBlob, MidiNote } from '@/utils/midiEncoder';
-import { StemPreviewRow, type StemPreviewTrack } from '@/components/audio/StemPreviewRow';
-import {
-  ENGINE_OFFLINE_MESSAGE,
-  fileKeyForAudio,
-  getCachedStems,
-  separateStemsForFile,
-  uploadMidiForDragDrop,
-} from '@/services/stemSeparation';
+import { uploadMidiForDragDrop } from '@/services/midiDragDropEngine';
 
 interface AudioMidiExtractorPanelProps {
   audioFile: File | null;
@@ -66,69 +63,10 @@ export function AudioMidiExtractorPanel({
   const [transcription, setTranscription] = useState<TranscriptionResult | null>(null);
   const [copiedSeq, setCopiedSeq] = useState(false);
   const [showFlGuide, setShowFlGuide] = useState(false);
-  const [isSeparating, setIsSeparating] = useState(false);
-  const [separateError, setSeparateError] = useState<string | null>(null);
-  const [previewStems, setPreviewStems] = useState<StemPreviewTrack[]>([]);
   const [midiBlobUrl, setMidiBlobUrl] = useState<string | null>(null);
   const [midiHttpUrl, setMidiHttpUrl] = useState<string | null>(null);
   const [isSavingMidi, setIsSavingMidi] = useState(false);
-
-  // POST to local Demucs engine; cache + finally so the orange banner always clears
-  useEffect(() => {
-    if (!audioFile) {
-      setPreviewStems([]);
-      setSeparateError(null);
-      setIsSeparating(false);
-      return;
-    }
-
-    const key = fileKeyForAudio(audioFile);
-    const cached = getCachedStems(key);
-    if (cached && cached.length > 0) {
-      setPreviewStems(cached);
-      setSeparateError(null);
-      setIsSeparating(false);
-      return;
-    }
-
-    let cancelled = false;
-
-    const runSeparation = async () => {
-      try {
-        setIsSeparating(true);
-        setSeparateError(null);
-        const result = await separateStemsForFile(audioFile);
-        // Always commit stems (shared cache survives Strict Mode remounts)
-        setPreviewStems(result.stems);
-        if (!cancelled) {
-          onShowToast('Stem separation complete — Vocals, Drums, Bass & Instruments ready');
-        }
-      } catch (err) {
-        console.error('Stem separation failed:', err);
-        if (cancelled) return;
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        const message =
-          err instanceof Error && err.message
-            ? err.message
-            : ENGINE_OFFLINE_MESSAGE;
-        const isOffline =
-          message === ENGINE_OFFLINE_MESSAGE ||
-          /Failed to fetch|NetworkError|ECONNREFUSED|fetch/i.test(message);
-        const userMessage = isOffline ? ENGINE_OFFLINE_MESSAGE : message;
-        setSeparateError(userMessage);
-        onShowToast(userMessage);
-      } finally {
-        // MUST clear loading state so the banner unmounts
-        setIsSeparating(false);
-      }
-    };
-
-    void runSeparation();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [audioFile]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [isSavingAllToDaw, setIsSavingAllToDaw] = useState(false);
 
   // Rebuild an `audio/midi` Blob + object URL for the active transcription so it can be
   // dragged directly into a DAW instead of forcing a file download. Revoked whenever the
@@ -170,22 +108,20 @@ export function AudioMidiExtractorPanel({
     };
   }, [transcription]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleDownloadStemPreview = (stem: StemPreviewTrack) => {
-    const a = document.createElement('a');
-    a.href = stem.audioUrl;
-    a.download = `${stem.name.toLowerCase()}.wav`;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    onShowToast(`Downloading ${stem.name} stem…`);
-  };
+  // Parse the transcribed polyphonic MIDI notes into Lead / Chords / Bass instrument layers by
+  // pitch register & onset polyphony — runs directly on the note buffer, no separated audio
+  // stems or backend involved.
+  const instrumentLayers: InstrumentLayerSplitResult | null = useMemo(() => {
+    if (!transcription) return null;
+    return splitTranscriptionIntoInstrumentLayers(transcription);
+  }, [transcription]);
 
   const handleTranscribe = async () => {
     setIsTranscribing(true);
     try {
       await new Promise(r => setTimeout(r, 350));
+      // Runs transcription directly on the uploaded audio file/buffer — no stem-separation
+      // backend involved.
       const res = await transcribeAudioToMidi({
         stem: selectedStem,
         timeSegment: selectedSegment,
@@ -226,7 +162,7 @@ export function AudioMidiExtractorPanel({
   };
 
   // Stable base name for the active transcription, reused for the download filename,
-  // the drag-to-DAW payload, and the Save-to-folder fallback below.
+  // the drag-to-DAW payload, the instrument-layer exports, and the Save-to-folder fallback.
   const stemName = transcription
     ? `${(audioFile?.name.replace(/\.[^/.]+$/, '') || 'ReferenceTrack')}_${transcription.stem}_Extracted`
     : null;
@@ -278,6 +214,64 @@ export function AudioMidiExtractorPanel({
     onShowToast(`Downloaded ${fileName} — drag it from your Downloads folder into the DAW.`);
   };
 
+  const handleExportLayer = (layer: 'lead' | 'chords' | 'bass') => {
+    if (!instrumentLayers) return;
+    const track = instrumentLayers[layer];
+    const filename = `${stemName || 'extracted_melody'}_${track.label.replace(/[^a-z0-9]+/gi, '')}.mid`;
+    downloadMidiBlob(track.midiData, filename);
+    onShowToast(`Downloaded ${track.label} layer (${track.notes.length} notes) as ${filename}!`);
+  };
+
+  const handleExportLayerBundle = () => {
+    if (!instrumentLayers) return;
+    const filename = `${stemName || 'extracted_melody'}_MultiTrack_Bundle.mid`;
+    downloadMidiBlob(instrumentLayers.bundleMidiData, filename);
+    onShowToast(`Downloaded Lead + Chords + Bass multi-track bundle as ${filename}!`);
+  };
+
+  // 1-click export of every split instrument layer (Lead, Chords, Bass, Bundle) straight into
+  // a DAW staging folder — via the File System Access API when available, or a sequenced
+  // batch download otherwise, so all 4 files land somewhere FL Studio's file browser can see.
+  const handleSaveAllToDawStagingFolder = async () => {
+    if (!transcription || !instrumentLayers) return;
+
+    const files: { name: string; data: Uint8Array }[] = [
+      { name: `${stemName}_Lead.mid`, data: instrumentLayers.lead.midiData },
+      { name: `${stemName}_Chords.mid`, data: instrumentLayers.chords.midiData },
+      { name: `${stemName}_Bass.mid`, data: instrumentLayers.bass.midiData },
+      { name: `${stemName}_MultiTrack_Bundle.mid`, data: instrumentLayers.bundleMidiData },
+    ];
+
+    setIsSavingAllToDaw(true);
+    try {
+      if (typeof window.showDirectoryPicker === 'function') {
+        try {
+          const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'daw-staging-folder' });
+          for (const file of files) {
+            const fileHandle = await dirHandle.getFileHandle(file.name, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(file.data.buffer as ArrayBuffer);
+            await writable.close();
+          }
+          onShowToast(`Saved ${files.length} MIDI layer files to "${dirHandle.name}" — ready in FL Studio's file browser!`);
+          return;
+        } catch (err) {
+          if ((err as DOMException)?.name === 'AbortError') return; // User cancelled the picker.
+          // Fall through to a batch download below (e.g. permission denied).
+        }
+      }
+
+      // Fallback: trigger a direct download for every layer, staggered slightly so the
+      // browser doesn't block "multiple simultaneous downloads" as a popup-like action.
+      files.forEach((file, i) => {
+        setTimeout(() => downloadMidiBlob(file.data, file.name), i * 200);
+      });
+      onShowToast(`Downloading ${files.length} MIDI layer files — drag them into FL Studio's browser.`);
+    } finally {
+      setIsSavingAllToDaw(false);
+    }
+  };
+
   const handleCopySequence = async () => {
     if (!transcription) return;
     try {
@@ -317,46 +311,11 @@ export function AudioMidiExtractorPanel({
               </span>
             </div>
             <p className="text-[10px] text-ink-400">
-              Extract polyphonic chords, basslines &amp; melodies into standard .MID files for FL Studio Piano Roll
+              Transcribes polyphonic chords, basslines &amp; melodies directly from your audio file into standard .MID files for FL Studio Piano Roll
             </p>
           </div>
         </div>
       </div>
-
-      {/* Inline Stem Audio Previews (local Demucs engine) */}
-      {audioFile && (
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-ink-300 uppercase tracking-wider flex items-center gap-1">
-            <Volume2 className="w-3 h-3 text-neon-amber" /> Stem Previews
-          </label>
-
-          {isSeparating && (
-            <div className="flex items-center gap-2 rounded-lg border border-neon-amber/40 bg-neon-amber/10 px-3 py-2.5 text-[11px] text-neon-amber font-semibold">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-              <span>Separating stems with AMD RX 6700 XT...</span>
-            </div>
-          )}
-
-          {separateError && !isSeparating && previewStems.length === 0 && (
-            <div className="rounded-lg border border-neon-rose/40 bg-neon-rose/10 px-3 py-2.5 text-[11px] text-neon-rose">
-              {separateError}
-            </div>
-          )}
-
-          {previewStems.length > 0 && (
-            <>
-              <p className="text-[10px] text-ink-400">
-                Listen to separated stem layers inline. Use the download icon to save a stem file.
-              </p>
-              <div className="space-y-1.5">
-                {previewStems.map((stem) => (
-                  <StemPreviewRow key={stem.id} stem={stem} onDownload={handleDownloadStemPreview} />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
 
       {/* 1. Instrument Stem Selector */}
       <div className="space-y-1.5">
@@ -547,6 +506,86 @@ export function AudioMidiExtractorPanel({
               <span>All Stems FL Bundle (.MID)</span>
             </button>
           </div>
+
+          {/* Split Extracted MIDI by Instrument Layer — pure pitch-register / polyphony
+              parsing of the notes above, no separated audio stems involved. */}
+          {instrumentLayers && (
+            <div className="bg-ink-900/70 rounded-lg p-3 border border-neon-magenta/30 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[10px] font-bold text-ink-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-neon-magenta" /> Split MIDI by Instrument Layer
+                </span>
+                <span className="text-[9px] text-ink-500 font-mono">Register + Polyphony Parsed</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleExportLayer('lead')}
+                  disabled={instrumentLayers.lead.notes.length === 0}
+                  className="btn btn-ghost !py-1.5 !px-2 !text-[10.5px] border border-ink-700/70 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex flex-col items-center gap-0.5 disabled:opacity-40"
+                  title="Export the monophonic top-line (mid-high register) as Lead.mid"
+                >
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <Guitar className="w-3.5 h-3.5" /> Export Lead.mid
+                  </span>
+                  <span className="text-[9px] text-ink-500 font-mono">{instrumentLayers.lead.notes.length} notes</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportLayer('chords')}
+                  disabled={instrumentLayers.chords.notes.length === 0}
+                  className="btn btn-ghost !py-1.5 !px-2 !text-[10.5px] border border-ink-700/70 hover:border-neon-magenta/60 text-ink-200 hover:text-neon-magenta flex flex-col items-center gap-0.5 disabled:opacity-40"
+                  title="Export the C3–C6 polyphonic chord clusters as Chords.mid"
+                >
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <Piano className="w-3.5 h-3.5" /> Export Chords.mid
+                  </span>
+                  <span className="text-[9px] text-ink-500 font-mono">{instrumentLayers.chords.notes.length} notes</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportLayer('bass')}
+                  disabled={instrumentLayers.bass.notes.length === 0}
+                  className="btn btn-ghost !py-1.5 !px-2 !text-[10.5px] border border-ink-700/70 hover:border-neon-amber/60 text-ink-200 hover:text-neon-amber flex flex-col items-center gap-0.5 disabled:opacity-40"
+                  title="Export every sub-C3 root note as Bass.mid"
+                >
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <Waves className="w-3.5 h-3.5" /> Export Bass.mid
+                  </span>
+                  <span className="text-[9px] text-ink-500 font-mono">{instrumentLayers.bass.notes.length} notes</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleExportLayerBundle}
+                className="w-full btn bg-gradient-to-r from-neon-magenta to-neon-cyan text-slate-950 font-extrabold !py-1.5 !px-2.5 !text-[11px] flex items-center justify-center gap-1.5 rounded-lg shadow-glow"
+                title="Export Lead + Chords + Bass as one 3-track multi-track bundle"
+              >
+                <FolderDown className="w-3.5 h-3.5" />
+                <span>Export Multi-Track Bundle.mid</span>
+              </button>
+
+              {/* Streamline Export to DAW: 1-click batch save of all 4 split files */}
+              <button
+                type="button"
+                onClick={() => { void handleSaveAllToDawStagingFolder(); }}
+                disabled={isSavingAllToDaw}
+                className="w-full btn btn-primary !py-2 !text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                title="Save Lead.mid, Chords.mid, Bass.mid & the bundle straight into a DAW staging folder"
+              >
+                {isSavingAllToDaw ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <HardDriveDownload className="w-4 h-4" />
+                )}
+                <span>{isSavingAllToDaw ? 'Saving All Layers…' : 'Save All to DAW Staging Folder'}</span>
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button

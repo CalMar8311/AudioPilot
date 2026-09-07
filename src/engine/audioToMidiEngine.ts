@@ -22,6 +22,7 @@ export interface TranscriptionResult {
   notes: MidiNote[];
   noteSequenceString: string;
   midiData: Uint8Array;
+  bpm: number;
 }
 
 export const STEM_OPTIONS: { id: StemType; label: string; icon: string; description: string }[] = [
@@ -211,6 +212,7 @@ export async function transcribeAudioToMidi(options: TranscriptionOptions): Prom
     notes,
     noteSequenceString,
     midiData,
+    bpm,
   };
 }
 
@@ -276,5 +278,131 @@ export async function transcribeAllStemsToMultiTrackMidi(
     totalNotesCount,
     tracksCount: tracks.length,
     midiData,
+  };
+}
+
+// ————————————————————————————————————————————————————————————————————————
+// Instrument-Layer Splitter — parses a single polyphonic transcription's note
+// events into Lead / Chords / Bass tracks purely by pitch register & onset
+// polyphony. This replaces relying on separated audio stems (no GPU-based
+// separation backend involved): everything below runs directly on the
+// MidiNote[] buffer already produced by transcribeAudioToMidi().
+// ————————————————————————————————————————————————————————————————————————
+
+const BASS_CEILING_MIDI = 48; // C3 — anything below this is treated as a bass register note
+const CHORD_CEILING_MIDI = 84; // C6 — upper bound of the "Chords / Mid" register band
+const LEAD_FLOOR_MIDI = 60; // C4 — a cluster's top note must clear this to become the Lead line
+
+export type InstrumentLayerId = 'lead' | 'chords' | 'bass';
+
+export interface InstrumentLayerTrack {
+  id: InstrumentLayerId;
+  label: string;
+  notes: MidiNote[];
+  midiData: Uint8Array;
+}
+
+export interface InstrumentLayerSplitResult {
+  lead: InstrumentLayerTrack;
+  chords: InstrumentLayerTrack;
+  bass: InstrumentLayerTrack;
+  /** 3-track (Lead, Chords, Bass) FL Studio-ready multi-track bundle combining all layers. */
+  bundleMidiData: Uint8Array;
+}
+
+/**
+ * Groups notes that start within `epsilonSec` of one another into "onset clusters" —
+ * i.e. the set of notes that sound simultaneously, which is how polyphonic chords are
+ * represented in the note buffer (multiple MidiNote entries sharing one startTimeSec).
+ */
+function groupNotesIntoOnsetClusters(notes: MidiNote[], epsilonSec: number = 0.02): MidiNote[][] {
+  const sorted = [...notes].sort((a, b) => a.startTimeSec - b.startTimeSec);
+  const clusters: MidiNote[][] = [];
+
+  for (const note of sorted) {
+    const lastCluster = clusters[clusters.length - 1];
+    if (lastCluster && Math.abs(lastCluster[0].startTimeSec - note.startTimeSec) <= epsilonSec) {
+      lastCluster.push(note);
+    } else {
+      clusters.push([note]);
+    }
+  }
+
+  return clusters;
+}
+
+/**
+ * Classifies a flat, potentially-polyphonic MidiNote[] buffer into three register/polyphony
+ * derived instrument layers:
+ *   - Bass: every note below C3 (MIDI 48) — the single root/octave notes of the low end.
+ *   - Lead / Melody: the single highest-pitched note per onset cluster, when it clears the
+ *     mid-high register floor (C4 / MIDI 60) — the monophonic top-line of the texture.
+ *   - Chords / Mid: whatever's left in the C3–C6 band once the Lead note is pulled out —
+ *     the simultaneous polyphonic clusters that make up the harmonic bed.
+ */
+export function classifyNotesByRegisterAndPolyphony(notes: MidiNote[]): {
+  lead: MidiNote[];
+  chords: MidiNote[];
+  bass: MidiNote[];
+} {
+  const lead: MidiNote[] = [];
+  const chords: MidiNote[] = [];
+  const bass: MidiNote[] = [];
+
+  const clusters = groupNotesIntoOnsetClusters(notes);
+
+  for (const cluster of clusters) {
+    const belowBass = cluster.filter((n) => n.midiNumber < BASS_CEILING_MIDI);
+    const melodicPool = cluster
+      .filter((n) => n.midiNumber >= BASS_CEILING_MIDI)
+      .sort((a, b) => b.midiNumber - a.midiNumber);
+
+    // Every sub-C3 note in this cluster is a bass note (root notes + any octave doubling).
+    bass.push(...belowBass);
+
+    if (melodicPool.length === 0) continue;
+
+    const [topNote, ...restNotes] = melodicPool;
+
+    if (topNote.midiNumber >= LEAD_FLOOR_MIDI) {
+      // Top note of the cluster clears the melodic register — it becomes the monophonic
+      // Lead/Melody line; everything else in the C3–C6 band forms the chord voicing.
+      lead.push(topNote);
+      chords.push(...restNotes.filter((n) => n.midiNumber < CHORD_CEILING_MIDI));
+    } else {
+      // The whole cluster sits below the melodic floor — treat it as a chord voicing instead
+      // of forcing a "lead" note out of a low/dense cluster.
+      chords.push(...melodicPool.filter((n) => n.midiNumber < CHORD_CEILING_MIDI));
+    }
+  }
+
+  return { lead, chords, bass };
+}
+
+/**
+ * Splits an already-transcribed polyphonic result into Lead / Chords / Bass instrument
+ * layers (see classifyNotesByRegisterAndPolyphony) and encodes each layer — plus a combined
+ * 3-track bundle — into standard .MID binary buffers ready for FL Studio / any DAW.
+ */
+export function splitTranscriptionIntoInstrumentLayers(transcription: TranscriptionResult): InstrumentLayerSplitResult {
+  const { lead, chords, bass } = classifyNotesByRegisterAndPolyphony(transcription.notes);
+  const bpm = transcription.bpm;
+  const baseLabel = transcription.stemLabel.split('/')[0].trim();
+
+  const leadMidiData = generateMidiFile(lead, `${baseLabel} - Lead`, bpm);
+  const chordsMidiData = generateMidiFile(chords, `${baseLabel} - Chords`, bpm);
+  const bassMidiData = generateMidiFile(bass, `${baseLabel} - Bass`, bpm);
+
+  const bundleMidiData = generateMultiTrackMidiFile(`${baseLabel}_InstrumentLayers`, bpm, [
+    { trackName: 'Lead / Melody', channel: 0, programNumber: 80, notes: lead },
+    { trackName: 'Chords / Mid', channel: 1, programNumber: 0, notes: chords },
+    { trackName: 'Bass', channel: 2, programNumber: 38, notes: bass },
+  ]);
+
+  return {
+    lead: { id: 'lead', label: 'Lead / Melody', notes: lead, midiData: leadMidiData },
+    chords: { id: 'chords', label: 'Chords / Mid', notes: chords, midiData: chordsMidiData },
+    bass: { id: 'bass', label: 'Bass', notes: bass, midiData: bassMidiData },
+    bundleMidiData,
   };
 }
