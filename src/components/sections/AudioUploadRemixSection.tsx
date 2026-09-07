@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, ChangeEvent, DragEvent } from 'react';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
-import { Upload, FileAudio, Wand2, Copy, Mic2, MonitorSpeaker, StopCircle, X, Headphones, Music2, Zap } from 'lucide-react';
+import { Upload, FileAudio, Wand2, Copy, Mic2, MonitorSpeaker, StopCircle, X, Headphones, Music2, Zap, CheckCircle2 } from 'lucide-react';
 import { SectionCard } from '@/components/ui';
 import { RemixDirectionCard } from '@/components/RemixDirectionCard';
 import { UploadedTrackBadgeCard } from '@/components/UploadedTrackBadgeCard';
 import { AudioMidiExtractorPanel } from '@/components/AudioMidiExtractorPanel';
+import { FolderPlaylistBrowser } from '@/components/FolderPlaylistBrowser';
 import { analyzeAudioWithGemini, RemixDirection } from '@/services/geminiAudio';
 import { generateRemixDirections } from '@/engine/remixEngine';
 import { cleanLyricText } from '@/engine/lyricEngine';
@@ -70,6 +71,14 @@ export function AudioUploadRemixSection({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [stagingFile, setStagingFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   // Surface mic/system-capture failures (permission denied, no audio track, etc.) as toasts
   useEffect(() => {
@@ -110,6 +119,59 @@ export function AudioUploadRemixSection({
     showToast('🎲 Generated 3 fresh remix concepts!');
   };
 
+  const isValidAudioFile = (file: File) =>
+    file.type.startsWith('audio/') || /\.(mp3|wav|m4a|flac|ogg)$/i.test(file.name);
+
+  const stagingFormatPill = (file: File) => {
+    const fromName = file.name.split('.').pop()?.toUpperCase();
+    if (fromName && fromName !== file.name.toUpperCase()) return fromName;
+    if (file.type.includes('mpeg') || file.type.includes('mp3')) return 'MP3';
+    if (file.type.includes('wav')) return 'WAV';
+    if (file.type.includes('flac')) return 'FLAC';
+    if (file.type.includes('ogg')) return 'OGG';
+    if (file.type.includes('m4a') || file.type.includes('mp4') || file.type.includes('aac')) return 'M4A';
+    return 'AUDIO';
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const stageAudioFile = (file: File) => {
+    if (!isValidAudioFile(file)) {
+      showToast('Please upload a valid .mp3 or .wav audio reference track');
+      return;
+    }
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setStagingFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const discardStaging = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setStagingFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const confirmAndAnalyzeTrack = async () => {
+    if (!stagingFile) return;
+    const file = stagingFile;
+    discardStaging();
+    await processAudioFile(file);
+  };
+
   const processAudioFile = async (file: File) => {
     if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|m4a|flac|ogg)$/i)) {
       showToast('Please upload a valid .mp3 or .wav audio reference track');
@@ -133,7 +195,7 @@ export function AudioUploadRemixSection({
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files[0]) {
-      processAudioFile(files[0]);
+      stageAudioFile(files[0]);
     }
   };
 
@@ -151,7 +213,7 @@ export function AudioUploadRemixSection({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processAudioFile(e.dataTransfer.files[0]);
+      stageAudioFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -399,7 +461,55 @@ export function AudioUploadRemixSection({
           {/* —— Upload tab —— */}
           {currentTab === 'upload' && (
             <>
-              {!audioUrl && (
+              {stagingFile && previewUrl && (
+                <div className="rounded-xl border border-neon-cyan/40 bg-ink-950/60 p-4 space-y-3 shadow-glow">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 space-y-1.5">
+                      <p className="text-[10px] uppercase tracking-widest text-neon-cyan font-semibold">
+                        Audition / Staging Preview
+                      </p>
+                      <p className="text-sm font-semibold text-ink-100 truncate" title={stagingFile.name}>
+                        {stagingFile.name}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40">
+                          {stagingFormatPill(stagingFile)}
+                        </span>
+                        <span className="text-[11px] text-ink-400 numeric">
+                          {formatFileSize(stagingFile.size)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <audio controls src={previewUrl} className="w-full h-9" />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={discardStaging}
+                      className="btn btn-ghost !py-2 !text-xs border border-ink-700/60 hover:border-neon-rose/50 text-ink-200 hover:text-neon-rose flex items-center justify-center gap-1.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Discard / Pick Another
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void confirmAndAnalyzeTrack(); }}
+                      className="btn btn-primary !py-2 !text-xs flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Confirm &amp; Analyze Track
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!stagingFile && !audioUrl && (
+                <FolderPlaylistBrowser onSendToAnalyzer={stageAudioFile} onShowToast={showToast} />
+              )}
+
+              {!stagingFile && !audioUrl && (
                 <div className="rounded-xl border border-ink-700/60 bg-ink-950/40 p-3">
                   {isRecording ? (
                     <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -460,7 +570,7 @@ export function AudioUploadRemixSection({
                 </div>
               )}
 
-              {!audioUrl ? (
+              {!stagingFile && !audioUrl ? (
                 !isRecording && (
                   <div
                     onClick={() => fileInputRef.current?.click()}
@@ -481,12 +591,12 @@ export function AudioUploadRemixSection({
                         <p className="text-xs font-semibold text-ink-100">
                           Drag &amp; Drop audio reference track (.mp3, .wav) or click to browse
                         </p>
-                        <p className="text-[10px] text-ink-400 mt-0.5">Supports MP3 and WAV files</p>
+                        <p className="text-[10px] text-ink-400 mt-0.5">Supports MP3 and WAV files — audition before analyzing</p>
                       </div>
                     </div>
                   </div>
                 )
-              ) : (
+              ) : !stagingFile && audioUrl ? (
                 <UploadedTrackBadgeCard
                   fileName={audioFile?.name || 'Uploaded Reference Track'}
                   fileSize={audioFile?.size || 0}
@@ -501,7 +611,7 @@ export function AudioUploadRemixSection({
                   onUpdateBpm={handleUpdateBpm}
                   onUpdateBpmRange={handleUpdateBpmRange}
                 />
-              )}
+              ) : null}
             </>
           )}
 
