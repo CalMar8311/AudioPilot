@@ -32,6 +32,20 @@ function getSteps(analysis: AudioAnalysisResult): ChordStep[] {
   }));
 }
 
+/** Nashville / Arabic scale-degree number from a Roman numeral (e.g. im7 → 1, VImaj7 → 6). */
+function getProgressionNumber(romanNumeral: string, chordDegree?: number): string {
+  if (chordDegree) return String(chordDegree);
+  const lower = (romanNumeral || '').toLowerCase().replace(/^[♭b#♯]+/, '');
+  if (lower.startsWith('vii') || lower.startsWith('bvii')) return '7';
+  if (lower.startsWith('vi') || lower.startsWith('bvi')) return '6';
+  if (lower.startsWith('iv')) return '4';
+  if (lower.startsWith('v')) return '5';
+  if (lower.startsWith('iii') || lower.startsWith('biii')) return '3';
+  if (lower.startsWith('ii') || lower.startsWith('bii')) return '2';
+  if (lower.startsWith('i')) return '1';
+  return '';
+}
+
 export function UploadedTrackBadgeCard({
   fileName,
   fileSize,
@@ -303,9 +317,9 @@ export function UploadedTrackBadgeCard({
                     className="group relative flex flex-col items-center justify-center min-w-[64px] px-2.5 py-1.5 rounded-lg bg-ink-900/90 hover:bg-neon-cyan/15 border border-ink-700/60 hover:border-neon-cyan/60 transition shadow-sm cursor-pointer"
                     title={`Click to copy or apply chord ${step.chordName} (${step.romanNumeral})`}
                   >
-                    {/* Step Number Badge */}
+                    {/* Nashville / Arabic scale-degree badge */}
                     <span className="text-[9px] font-bold font-mono px-1.5 py-0.2 rounded bg-neon-cyan/20 text-neon-cyan mb-1">
-                      Step {step.stepNumber}
+                      Chord {getProgressionNumber(step.romanNumeral)}
                     </span>
                     {/* Bold Chord Name */}
                     <span className="text-xs font-extrabold text-ink-100 group-hover:text-neon-cyan transition numeric">
@@ -321,9 +335,14 @@ export function UploadedTrackBadgeCard({
 
               {/* Quick action bar to inject harmonic movement tag */}
               <div className="flex items-center justify-between pt-2 border-t border-ink-800/60 text-[10px] flex-wrap gap-1">
-                <span className="text-ink-400 font-mono">
-                  Roman Progression: {getSteps(analysis).map(s => s.romanNumeral).join(' - ')}
-                </span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-ink-400 font-mono">
+                    Roman Progression: {getSteps(analysis).map(s => s.romanNumeral).join(' - ')}
+                  </span>
+                  <span className="text-ink-300 font-mono">
+                    Progression Numbers: {getSteps(analysis).map(s => getProgressionNumber(s.romanNumeral)).filter(Boolean).join(' - ')}
+                  </span>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
