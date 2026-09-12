@@ -88,6 +88,10 @@ export type AudioReferenceState = {
   rerollCount: number;
 };
 
+// Build allowlist once at module load. getAllTaxonomySubgenres() includes every native
+// catalog sub PLUS every crossover accent from the SUBGENRE_MAP, so strings like 'Soul',
+// 'Cloud Rap', 'Vintage Motown', 'Ambient Pads' etc. survive normalizePromptState()
+// even after the user manually clicks a genre pill (which calls normalizePromptState).
 const knownSubgenres = new Set([
   ...GENRES.flatMap(genre => genre.subgenres),
   ...MICRO_GENRES.flatMap(group => group.options),
