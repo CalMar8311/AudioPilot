@@ -62,6 +62,8 @@ export function UploadedTrackBadgeCard({
 }: UploadedTrackBadgeCardProps) {
   const formattedSize = (fileSize / (1024 * 1024)).toFixed(2) + ' MB';
   const currentBpm = analysis?.detectedBpm || 120;
+  const chordSteps = analysis ? getSteps(analysis) : [];
+  const progressionNumbers = chordSteps.map((s) => getProgressionNumber(s.romanNumeral)).filter(Boolean);
 
   const [bpmInputValue, setBpmInputValue] = useState<string>(String(currentBpm));
   const [bpmRange, setBpmRange] = useState<BpmDetectionRange>('standard');
@@ -307,42 +309,59 @@ export function UploadedTrackBadgeCard({
                 )}
               </div>
 
-              {/* Sequence Pills */}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {getSteps(analysis).map((step) => (
-                  <button
-                    key={step.stepNumber}
-                    type="button"
-                    onClick={() => onCopyChord?.(step.chordName, step.romanNumeral)}
-                    className="group relative flex flex-col items-center justify-center min-w-[64px] px-2.5 py-1.5 rounded-lg bg-ink-900/90 hover:bg-neon-cyan/15 border border-ink-700/60 hover:border-neon-cyan/60 transition shadow-sm cursor-pointer"
-                    title={`Click to copy or apply chord ${step.chordName} (${step.romanNumeral})`}
-                  >
-                    {/* Nashville / Arabic scale-degree badge */}
-                    <span className="text-[9px] font-bold font-mono px-1.5 py-0.2 rounded bg-neon-cyan/20 text-neon-cyan mb-1">
-                      Chord {getProgressionNumber(step.romanNumeral)}
+              {/* Sequence Pills + large Nashville / scale-degree display */}
+              <div className="flex flex-row items-center gap-4 flex-wrap pt-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  {chordSteps.map((step) => (
+                    <button
+                      key={step.stepNumber}
+                      type="button"
+                      onClick={() => onCopyChord?.(step.chordName, step.romanNumeral)}
+                      className="group relative flex flex-col items-center justify-center min-w-[64px] px-2.5 py-1.5 rounded-lg bg-ink-900/90 hover:bg-neon-cyan/15 border border-ink-700/60 hover:border-neon-cyan/60 transition shadow-sm cursor-pointer"
+                      title={`Click to copy or apply chord ${step.chordName} (${step.romanNumeral})`}
+                    >
+                      {/* Nashville / Arabic scale-degree badge */}
+                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.2 rounded bg-neon-cyan/20 text-neon-cyan mb-1">
+                        Chord {getProgressionNumber(step.romanNumeral)}
+                      </span>
+                      {/* Bold Chord Name */}
+                      <span className="text-xs font-extrabold text-ink-100 group-hover:text-neon-cyan transition numeric">
+                        {step.chordName}
+                      </span>
+                      {/* Case-Sensitive Roman Numeral */}
+                      <span className="text-[10px] font-mono font-bold text-neon-magenta mt-0.5">
+                        {step.romanNumeral}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {progressionNumbers.length > 0 && (
+                  <div className="flex flex-col justify-center items-start pl-6 border-l border-cyan-900/40 my-auto">
+                    <span className="text-[10px] tracking-widest uppercase font-semibold text-cyan-400/70 mb-1">
+                      Nashville / Scale Degree
                     </span>
-                    {/* Bold Chord Name */}
-                    <span className="text-xs font-extrabold text-ink-100 group-hover:text-neon-cyan transition numeric">
-                      {step.chordName}
-                    </span>
-                    {/* Case-Sensitive Roman Numeral */}
-                    <span className="text-[10px] font-mono font-bold text-neon-magenta mt-0.5">
-                      {step.romanNumeral}
-                    </span>
-                  </button>
-                ))}
+                    <div className="flex items-center gap-3">
+                      {progressionNumbers.map((num, idx) => (
+                        <Fragment key={`${num}-${idx}`}>
+                          <span className="text-4xl md:text-5xl font-black text-cyan-300 drop-shadow-[0_0_15px_rgba(6,182,212,0.75)] select-none">
+                            {num}
+                          </span>
+                          {idx < progressionNumbers.length - 1 && (
+                            <span className="text-xl font-bold text-cyan-700/60 select-none">-</span>
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Quick action bar to inject harmonic movement tag */}
               <div className="flex items-center justify-between pt-2 border-t border-ink-800/60 text-[10px] flex-wrap gap-1">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-ink-400 font-mono">
-                    Roman Progression: {getSteps(analysis).map(s => s.romanNumeral).join(' - ')}
-                  </span>
-                  <span className="text-ink-300 font-mono">
-                    Progression Numbers: {getSteps(analysis).map(s => getProgressionNumber(s.romanNumeral)).filter(Boolean).join(' - ')}
-                  </span>
-                </div>
+                <span className="text-ink-400 font-mono">
+                  Roman Progression: {chordSteps.map((s) => s.romanNumeral).join(' - ')}
+                </span>
                 <button
                   type="button"
                   onClick={() => {
