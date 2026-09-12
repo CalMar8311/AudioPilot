@@ -14,7 +14,7 @@ export function GenreSection({ eng }: { eng: PromptEngine }) {
 
   const filtered = GENRES.filter(g =>
     g.label.toLowerCase().includes(query.toLowerCase()) ||
-    g.subgenres.some(s => s.toLowerCase().includes(query.toLowerCase()))
+    getFusionSubgenrePool(g.id).some(s => s.toLowerCase().includes(query.toLowerCase()))
   );
 
   // Selected genres (preserve order = primary first)
@@ -30,7 +30,7 @@ export function GenreSection({ eng }: { eng: PromptEngine }) {
       accent="cyan"
       right={
         <div className="flex items-center gap-2">
-          <DiceButton onClick={randomizeGenres} title="Randomize genres" color="cyan" />
+          <DiceButton onClick={randomizeGenres} title="Surprise Me — intelligent genre fusion" color="cyan" />
           <span className="text-[10px] uppercase tracking-widest text-ink-400">
             {state.genres.length}/{MAX_BLEND_SLOTS} fused
           </span>
