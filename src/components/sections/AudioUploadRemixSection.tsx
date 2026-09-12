@@ -696,11 +696,17 @@ export function AudioUploadRemixSection({
                         dir={dir}
                         idx={idx}
                         isSelected={selectedDirectionId === dir.id}
+                        detectedChords={
+                          analysis.chordProgression
+                            ? analysis.chordProgression.split(/[-–—→,]/).map((c) => c.trim()).filter(Boolean)
+                            : undefined
+                        }
                         onApply={handleApplyRemixDirection}
                         onCopyStyle={copyCardStylePrompt}
                         onCopyLyrics={copyCardLyricsAndTags}
                         onJumpToLyrics={onJumpToLyrics}
                         onInjectHarmonicMetatag={(dir) => handleInjectHarmonicTag(dir.harmonicMetatag || `[Harmonic Movement: ${dir.romanProgression || 'i - iv - VII - III'}]`)}
+                        onInjectHarmonizationTag={handleInjectHarmonicTag}
                       />
                     ))}
                   </div>

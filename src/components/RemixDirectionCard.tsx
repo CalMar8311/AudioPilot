@@ -1,32 +1,53 @@
-import { Copy, FileText, Sparkles, Check, ArrowRight, BookOpen, Music } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Copy, FileText, Sparkles, Check, ArrowRight, BookOpen, Music, Dices } from 'lucide-react';
 import type { RemixDirection } from '@/services/geminiAudio';
+import { parseKeyString, hashStringToSeed, rollHarmonizationVariations } from '@/utils/harmonicTheoryEngine';
 
 interface RemixDirectionCardProps {
   dir: RemixDirection;
   idx: number;
   isSelected: boolean;
+  /** Literal chord names from the detected progression (e.g. ["F#m7", "Bm7", "E7", "AMaj7"]), used to tailor the Jazz/Neo-Soul Reharm breakdown. */
+  detectedChords?: string[];
   onApply: (dir: RemixDirection) => void;
   onCopyStyle: (dir: RemixDirection) => void;
   onCopyLyrics: (dir: RemixDirection) => void;
   onJumpToLyrics?: () => void;
   onInjectHarmonicMetatag?: (dir: RemixDirection) => void;
+  /** Injects a single procedurally-generated Suno bracket tag (from the Harmonizations section) into the Lyric Canvas. */
+  onInjectHarmonizationTag?: (tag: string) => void;
 }
 
 export function RemixDirectionCard({
   dir,
   idx,
   isSelected,
+  detectedChords,
   onApply,
   onCopyStyle,
   onCopyLyrics,
   onJumpToLyrics,
   onInjectHarmonicMetatag,
+  onInjectHarmonizationTag,
 }: RemixDirectionCardProps) {
   const badgeColors = [
     'bg-neon-magenta/15 text-neon-magenta border-neon-magenta/30',
     'bg-neon-amber/15 text-neon-amber border-neon-amber/30',
     'bg-neon-lime/15 text-neon-lime border-neon-lime/30',
   ];
+
+  // Rolls 2–3 procedurally-computed harmonization techniques (real music theory rules —
+  // relative-key pivots, modal interchange, jazz/neo-soul reharm, vocal stacking) for this
+  // card's detected key. Re-rolls on every 🎲 click via `rollCount`, and is deterministic
+  // per card + rollCount so re-renders don't cause the recommendations to flicker.
+  const [rollCount, setRollCount] = useState(0);
+  const harmonizations = useMemo(() => {
+    const { rootKey, scale } = parseKeyString(dir.key);
+    const seed = hashStringToSeed(`${dir.id}_${rollCount}`);
+    return rollHarmonizationVariations({ rootKey, scale, detectedChords }, seed);
+  }, [dir.id, dir.key, rollCount, detectedChords]);
+
+  const handleShuffleHarmonizations = () => setRollCount((c) => c + 1);
 
   return (
     <div
@@ -58,17 +79,55 @@ export function RemixDirectionCard({
           </div>
         )}
 
-        {(dir.reharmonization || dir.romanProgression) && (
-          <div className="text-[10px] bg-neon-amber/10 p-1.5 rounded border border-neon-amber/30 space-y-0.5">
-            <span className="text-neon-amber font-bold text-[9px] uppercase tracking-wider flex items-center gap-1">
-              <Music className="w-3 h-3 text-neon-amber" /> Suggested Reharmonization
-            </span>
-            {dir.reharmonization && <span className="text-ink-100 font-medium block truncate">{dir.reharmonization}</span>}
-            {dir.romanProgression && (
-              <span className="text-[9px] font-mono text-neon-magenta block font-bold mt-0.5">
-                Roman Loop: {dir.romanProgression}
+        {harmonizations.length > 0 && (
+          <div className="text-[10px] bg-neon-amber/10 p-1.5 rounded border border-neon-amber/30 space-y-1.5">
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-neon-amber font-bold text-[9px] uppercase tracking-wider flex items-center gap-1">
+                <Music className="w-3 h-3 text-neon-amber" /> Harmonizations
               </span>
-            )}
+              <button
+                type="button"
+                onClick={handleShuffleHarmonizations}
+                className="p-1 rounded-md bg-ink-900/80 hover:bg-neon-amber/20 text-neon-amber border border-neon-amber/30 transition"
+                title="Shuffle to 2-3 new procedurally-generated harmonization techniques"
+                aria-label="Shuffle harmonization ideas"
+              >
+                <Dices className="w-3 h-3" />
+              </button>
+            </div>
+
+            {harmonizations.map((h) => (
+              <div key={h.id} className="space-y-0.5 border-t border-neon-amber/20 pt-1.5 first:border-t-0 first:pt-0">
+                <span className="text-ink-100 font-bold text-[9px] block">{h.label}</span>
+
+                <p className="leading-snug">
+                  <span className="text-ink-500 font-semibold uppercase text-[8.5px]">Chord Movement / Theory Breakdown: </span>
+                  <span className="text-ink-200">{h.theoryBreakdown}</span>
+                </p>
+
+                <p className="font-mono">
+                  <span className="text-ink-500 font-semibold uppercase text-[8.5px]">Suno Style Prompt Tag: </span>
+                  <span className="text-neon-cyan">{h.stylePromptTag}</span>
+                </p>
+
+                {onInjectHarmonizationTag ? (
+                  <button
+                    type="button"
+                    onClick={() => onInjectHarmonizationTag(h.bracketTag)}
+                    className="font-mono text-left hover:underline"
+                    title="Inject this Suno bracket tag into the Lyric Canvas"
+                  >
+                    <span className="text-ink-500 font-semibold uppercase text-[8.5px]">Suno Bracket Tag: </span>
+                    <span className="text-neon-magenta">{h.bracketTag}</span>
+                  </button>
+                ) : (
+                  <p className="font-mono">
+                    <span className="text-ink-500 font-semibold uppercase text-[8.5px]">Suno Bracket Tag: </span>
+                    <span className="text-neon-magenta">{h.bracketTag}</span>
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
