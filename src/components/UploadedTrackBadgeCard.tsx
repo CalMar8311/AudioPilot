@@ -365,7 +365,7 @@ export function UploadedTrackBadgeCard({
                 <button
                   type="button"
                   onClick={() => {
-                    const tag = `[Harmonic Movement: ${getSteps(analysis).map(s => s.romanNumeral).join(' - ')}]`;
+                    const tag = `[Harmonic Movement: ${chordSteps.map((s) => s.romanNumeral).join(' - ')}]`;
                     onInjectHarmonicMovement?.(tag);
                   }}
                   className="btn btn-ghost !py-1 !px-2.5 !text-[10px] text-neon-cyan hover:bg-neon-cyan/10 border border-neon-cyan/30 flex items-center gap-1 font-mono font-semibold"
