@@ -853,10 +853,18 @@ export function usePromptEngine() {
     [...arr].sort(() => Math.random() - 0.5).slice(0, n);
 
   const randomizeGenres = useCallback(() => {
-    setState(prev => {
-      const { genres, subgenres } = rollIntelligentGenreFusion();
-      return { ...prev, genres, subgenres, blend: 50 + Math.floor(Math.random() * 4) * 10, stylePromptOverride: '' };
-    });
+    // rollIntelligentGenreFusion() picks 1–2 random genres and 0–2 random subgenre
+    // accents via Fisher-Yates shuffle on every call — no deterministic pairings.
+    // The result is stored directly (bypassing normalizePromptState's allowlist
+    // filter here) because all rolled labels ARE in knownSubgenres by construction.
+    const { genres, subgenres } = rollIntelligentGenreFusion();
+    setState(prev => ({
+      ...prev,
+      genres,
+      subgenres,
+      blend: 50 + Math.floor(Math.random() * 4) * 10,
+      stylePromptOverride: '',
+    }));
     showToast('Randomized genre fusion');
   }, [showToast]);
 
