@@ -18,6 +18,7 @@ import {
   applySurpriseRecipeToState,
   pickRandomSurpriseRecipe,
 } from '@/data/surpriseMe';
+import { getAllTaxonomySubgenres, rollIntelligentGenreFusion } from '@/data/genreTaxonomy';
 import {
   MAX_BLEND_SLOTS,
   compileArtistBlendPrompt,
@@ -90,6 +91,7 @@ export type AudioReferenceState = {
 const knownSubgenres = new Set([
   ...GENRES.flatMap(genre => genre.subgenres),
   ...MICRO_GENRES.flatMap(group => group.options),
+  ...getAllTaxonomySubgenres(),
 ]);
 
 const crowdNoiseTriggerInstruments = new Set(['live-drums', 'acoustic-drums', 'acoustic-guitar']);
@@ -515,9 +517,9 @@ export function randomState(): PromptState {
     const c = [...arr].sort(() => Math.random() - 0.5);
     return c.slice(0, n);
   };
-  const genres = pick(GENRES, 1 + Math.floor(Math.random() * 2)).map(g => g.id);
-  const primaryGenre = GENRES.find(g => g.id === genres[0]);
-  const subgenres = primaryGenre ? pick(primaryGenre.subgenres, 1) : [];
+  const fusion = rollIntelligentGenreFusion();
+  const genres = fusion.genres;
+  const subgenres = fusion.subgenres;
   return {
     genres,
     subgenres,
@@ -848,12 +850,10 @@ export function usePromptEngine() {
 
   const randomizeGenres = useCallback(() => {
     setState(prev => {
-      const pickedGenres = pickN(GENRES, 1 + Math.floor(Math.random() * MAX_BLEND_SLOTS)).map(g => g.id);
-      const primary = GENRES.find(g => g.id === pickedGenres[0]);
-      const subgenres = primary ? pickN(primary.subgenres, 1) : [];
-      return { ...prev, genres: pickedGenres, subgenres, blend: 50 + Math.floor(Math.random() * 4) * 10 };
+      const { genres, subgenres } = rollIntelligentGenreFusion();
+      return { ...prev, genres, subgenres, blend: 50 + Math.floor(Math.random() * 4) * 10, stylePromptOverride: '' };
     });
-    showToast('Randomized genres');
+    showToast('Randomized genre fusion');
   }, [showToast]);
 
   const randomizeVocals = useCallback(() => {

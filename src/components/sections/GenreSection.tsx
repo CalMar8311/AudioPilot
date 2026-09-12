@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Disc3, Sparkles, Layers } from 'lucide-react';
 import { GENRES, GENRE_BLUEPRINTS, type GenreBlueprint } from '@/data/catalogs';
+import { getFusionSubgenrePool } from '@/data/genreTaxonomy';
 import { MAX_BLEND_SLOTS, blendWeights } from '@/engine/styleFusion';
 import { SectionCard, Tag, SearchInput, RangeRow, DiceButton } from '@/components/ui';
 import type { PromptEngine } from '@/engine/usePromptEngine';
@@ -18,8 +19,9 @@ export function GenreSection({ eng }: { eng: PromptEngine }) {
 
   // Selected genres (preserve order = primary first)
   const selected = GENRES.filter(g => state.genres.includes(g.id));
-  const allSubgenres = selected.flatMap(g => g.subgenres);
-  const uniqueSubgenres = Array.from(new Set(allSubgenres));
+  const uniqueSubgenres = Array.from(
+    new Set(selected.flatMap(g => getFusionSubgenrePool(g.id)))
+  );
 
   return (
     <SectionCard
