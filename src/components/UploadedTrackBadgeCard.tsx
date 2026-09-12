@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { FileAudio, RefreshCw, Trash2, Sparkles, Music, Copy, Activity, Sliders, Plus, Minus } from 'lucide-react';
 import type { AudioAnalysisResult, ChordStep } from '@/services/geminiAudio';
 import { normalizeBpmWithRange, BpmDetectionRange } from '@/utils/bpmDetector';
