@@ -559,6 +559,9 @@ export function usePromptEngine() {
   const [recentPrompts, setRecentPrompts] = useState<PromptSnapshot[]>(() => loadSnapshots(RECENT_KEY));
   const [toast, setToast] = useState<string | null>(null);
   const [surpriseTheme, setSurpriseTheme] = useState<SurpriseTheme | null>(null);
+  // Incremented by reset() so that App.tsx can key local-state components off this value,
+  // forcing them to remount (and re-initialise their own useState defaults) atomically.
+  const [resetKey, setResetKey] = useState(0);
   const lyricsCursor = useRef<number | null>(null);
 
   const [audioState, setAudioState] = useState<AudioReferenceState>({
@@ -836,12 +839,33 @@ export function usePromptEngine() {
   }, [showToast]);
 
   const reset = useCallback(() => {
-    setState({
-      ...EMPTY_STATE,
-      lyrics: '',
-      stylePromptOverride: '',
+    // 1. Clear global prompt state.
+    setState({ ...EMPTY_STATE, lyrics: '', stylePromptOverride: '' });
+
+    // 2. Clear audio reference state, revoking any active object URL.
+    setAudioState(prev => {
+      if (prev.audioUrl) URL.revokeObjectURL(prev.audioUrl);
+      return {
+        audioFile: null,
+        audioUrl: null,
+        fileName: '',
+        fileSize: 0,
+        isAnalyzing: false,
+        analysis: null,
+        selectedDirectionId: null,
+        rerollCount: 0,
+      };
     });
-    showToast('Cleared all selections');
+
+    // 3. Clear AI-generated surprise theme (consumed by LyricGeneratorSection).
+    setSurpriseTheme(null);
+
+    // 4. Bump resetKey so App.tsx can remount local-state sections
+    //    (SectionArrangementBuilder, AudioRemixStudio, FolderPlaylistBrowser, AudioMidiExtractorPanel)
+    //    via key={eng.resetKey}, wiping their useState defaults atomically.
+    setResetKey(k => k + 1);
+
+    showToast('Reset — all modules cleared');
   }, [showToast]);
 
   // ---- Per-section randomize functions ----
@@ -1030,7 +1054,7 @@ export function usePromptEngine() {
     loadPreset, savePreset, deletePreset,
     clearPresetSelection,
     applyMicroGenreRecipe,
-    randomize, reset,
+    randomize, reset, resetKey,
     randomizeGenres, randomizeVocals, randomizeArtistArchetypes, randomizeInstruments, randomizeMoodTempo,
     applyBlueprint, surpriseMe, surprising, surpriseTheme, setSurpriseTheme,
     pushHistory, loadHistoryItem,

@@ -104,7 +104,11 @@ function App() {
         <main className="w-full">
           {/* TAB 1: Audio Remix — Pure Remix Engine (No Side Outputs) */}
           <section className={activeTab === 'remix' ? 'space-y-6 block' : 'hidden'}>
-            <AudioRemixStudio 
+            {/* key=resetKey forces AudioRemixStudio (and its children: AudioUploadRemixSection,
+                FolderPlaylistBrowser, AudioMidiExtractorPanel) to fully remount on Reset All,
+                clearing all local useState (stagingFile, playlist, MIDI notes, etc.) atomically. */}
+            <AudioRemixStudio
+              key={eng.resetKey}
               eng={eng} 
               onJumpToLyrics={() => setActiveTab('lyrics')} 
             />
@@ -123,7 +127,9 @@ function App() {
           <section className={activeTab === 'lyrics' ? 'space-y-6 block' : 'hidden'}>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
               <div className="lg:col-span-8 space-y-5 min-w-0">
-                <SectionArrangementBuilder eng={eng} />
+                {/* key=resetKey remounts SectionArrangementBuilder, resetting arrangedSections
+                    to its default initial list (Intro, Verse 1, Pre-Chorus, Chorus, Outro). */}
+                <SectionArrangementBuilder key={eng.resetKey} eng={eng} />
                 <SoundEffectsSection eng={eng} onInsertTag={eng.insertLyricTag} />
                 <LyricGeneratorSection eng={eng} />
               </div>

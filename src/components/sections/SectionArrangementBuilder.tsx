@@ -66,6 +66,7 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
   }, [arrangedSections, showToast]);
 
   const moveSection = useCallback((fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= arrangedSections.length) return;
     const newSections = [...arrangedSections];
     const [moved] = newSections.splice(fromIndex, 1);
     newSections.splice(toIndex, 0, moved);
@@ -163,12 +164,7 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
             {arrangedSections.map((section, index) => (
               <div
                 key={section.id}
-                draggable
-                onDragStart={(e) => {
-                  setDraggedIndex(index);
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', String(index));
-                }}
+                /* Drop-target only — NOT a drag source. draggable is on the grip handle. */
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
@@ -179,28 +175,22 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                   e.preventDefault();
                   handleDrop(index);
                 }}
-                onDragEnd={() => {
-                  // Always reset — prevents fist cursor getting stuck if dropped outside a target
-                  setDraggedIndex(null);
-                  setDragOverIndex(null);
-                }}
                 className={`glass-soft rounded-lg p-3 border transition-all select-none ${
                   draggedIndex === index
-                    ? 'cursor-grabbing opacity-50 border-neon-cyan/30'
+                    ? 'opacity-50 border-neon-cyan/30'
                     : dragOverIndex === index
-                    ? 'cursor-grab border-neon-cyan bg-neon-cyan/10 translate-y-0.5'
+                    ? 'border-neon-cyan bg-neon-cyan/10 translate-y-0.5'
                     : selectedSection === index
-                    ? 'cursor-grab border-neon-cyan/60 bg-neon-cyan/5'
-                    : 'cursor-grab border-ink-700/50 hover:border-ink-600'
+                    ? 'border-neon-cyan/60 bg-neon-cyan/5'
+                    : 'border-ink-700/50 hover:border-ink-600'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  {/* Drag handle + up/down nudge buttons */}
-                  <div className="flex items-center gap-1" draggable={false} onDragStart={(e) => e.stopPropagation()}>
+                  {/* ▲ ▼ nudge buttons + dedicated drag handle */}
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
                       draggable={false}
-                      onDragStart={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); moveSection(index, Math.max(0, index - 1)); }}
                       disabled={index === 0}
                       className="p-1 text-ink-400 hover:text-ink-200 disabled:opacity-30 cursor-pointer"
@@ -208,11 +198,27 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                     >
                       ▲
                     </button>
-                    <GripVertical className="w-4 h-4 text-ink-500 pointer-events-none" title="Drag to reorder" />
+                    {/* ONLY this span is draggable — prevents the full-row fist-cursor bug */}
+                    <span
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedIndex(index);
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', String(index));
+                      }}
+                      onDragEnd={() => {
+                        // Always reset so the grab cursor never gets stuck
+                        setDraggedIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      className="p-1 rounded cursor-grab active:cursor-grabbing text-ink-500 hover:text-ink-300 touch-none"
+                      title="Drag to reorder"
+                    >
+                      <GripVertical className="w-4 h-4 pointer-events-none" />
+                    </span>
                     <button
                       type="button"
                       draggable={false}
-                      onDragStart={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); moveSection(index, Math.min(arrangedSections.length - 1, index + 1)); }}
                       disabled={index === arrangedSections.length - 1}
                       className="p-1 text-ink-400 hover:text-ink-200 disabled:opacity-30 cursor-pointer"
@@ -223,14 +229,12 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                   </div>
 
                   {/* Section label */}
-                  <div className="flex-1" draggable={false} onDragStart={(e) => e.stopPropagation()}>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-ink-100 pointer-events-none">[{section.label}]</span>
+                      <span className="text-sm font-medium text-ink-100">[{section.label}]</span>
                       <button
                         type="button"
-                        draggable={false}
-                        onDragStart={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setSelectedSection(selectedSection === index ? null : index); }}
+                        onClick={() => setSelectedSection(selectedSection === index ? null : index)}
                         className="text-[10px] text-ink-400 hover:text-neon-cyan transition cursor-pointer"
                       >
                         {selectedSection === index ? 'Close' : 'Edit Energy'}
@@ -244,9 +248,7 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                           <button
                             key={energy.id}
                             type="button"
-                            draggable={false}
-                            onDragStart={(e) => e.stopPropagation()}
-                            onClick={(e) => { e.stopPropagation(); updateSectionEnergy(index, energy.label); }}
+                            onClick={() => updateSectionEnergy(index, energy.label)}
                             className={
                               'px-2 py-1 rounded text-[10px] font-medium border transition-all cursor-pointer ' +
                               (section.energy === energy.label
@@ -262,7 +264,7 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                   </div>
 
                   {/* Current energy display */}
-                  <div className="text-right pointer-events-none">
+                  <div className="text-right">
                     <div className="flex items-center gap-1">
                       <Zap className="w-3 h-3 text-neon-amber" />
                       <span className="text-[10px] text-ink-300">{section.energy}</span>
@@ -272,9 +274,7 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                   {/* Remove button */}
                   <button
                     type="button"
-                    draggable={false}
-                    onDragStart={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); removeSection(index); }}
+                    onClick={() => removeSection(index)}
                     className="p-1.5 text-ink-400 hover:text-neon-rose transition cursor-pointer"
                     title="Remove section"
                   >
