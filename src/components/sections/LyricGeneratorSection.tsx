@@ -414,6 +414,164 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         </span>
       }
     >
+      {/* ── Dynamic Narrative Matrix ─────────────────────────────────────────── */}
+      <div className="mb-4 bg-gradient-to-br from-neon-blue/5 via-ink-900/60 to-neon-magenta/5 rounded-xl border border-neon-blue/30 p-3 space-y-3">
+        {/* Header row */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-neon-blue" />
+            <span className="text-xs font-bold text-ink-100 uppercase tracking-wider">
+              Dynamic Narrative Matrix
+            </span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-blue/15 text-neon-blue border border-neon-blue/30">
+              Genre-Aware
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleRollNarrative}
+            className="btn btn-ghost !py-1.5 !px-3 !text-xs border border-neon-blue/50 hover:bg-neon-blue/10 text-neon-blue flex items-center gap-1.5 transition rounded-lg"
+            title="Generate a fresh, genre-aware story concept"
+          >
+            <Dices className="w-3.5 h-3.5" />
+            🎲 Roll Story / Topic
+          </button>
+        </div>
+
+        {/* Vibe / Focus filter pills */}
+        <div className="space-y-1.5">
+          <span className="text-[10px] uppercase tracking-widest text-ink-400">Vibe / Focus Filter</span>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setVibeFilter(null)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                vibeFilter === null
+                  ? 'bg-neon-blue/15 border-neon-blue/60 text-neon-blue'
+                  : 'bg-ink-850/60 border-ink-700/60 text-ink-400 hover:border-neon-blue/40 hover:text-ink-200'
+              }`}
+            >
+              ✦ Any
+            </button>
+            {VIBE_OPTIONS.map(v => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setVibeFilter(vibeFilter === v.id ? null : v.id)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                  vibeFilter === v.id
+                    ? 'bg-neon-blue/15 border-neon-blue/60 text-neon-blue'
+                    : 'bg-ink-850/60 border-ink-700/60 text-ink-400 hover:border-neon-blue/40 hover:text-ink-200'
+                }`}
+              >
+                {v.emoji} {v.id}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Generated narrative card */}
+        {generatedNarrative ? (
+          <div className="bg-ink-950/60 rounded-lg border border-neon-blue/20 p-3 space-y-2.5 animate-slideIn">
+            {/* Title + archetype + genre frame */}
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="text-sm font-black text-neon-cyan tracking-tight leading-tight">
+                  &ldquo;{generatedNarrative.titleIdea}&rdquo;
+                </h3>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-magenta/10 border border-neon-magenta/30 text-neon-magenta">
+                    {generatedNarrative.archetypeName}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-blue/10 border border-neon-blue/30 text-neon-blue">
+                    {generatedNarrative.genreFrame}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRollNarrative}
+                className="p-1.5 rounded-lg text-ink-400 hover:text-neon-blue hover:bg-neon-blue/10 transition"
+                title="Re-roll another concept"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Story brief */}
+            <div className="space-y-0.5">
+              <span className="text-[9px] uppercase tracking-widest text-ink-500 font-semibold">Story Brief</span>
+              <p className="text-[11px] text-ink-200 leading-relaxed">{generatedNarrative.storyBrief}</p>
+            </div>
+
+            {/* Seed hooks */}
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase tracking-widest text-ink-500 font-semibold">Lyric Seed Hooks</span>
+              <div className="space-y-1.5">
+                {generatedNarrative.lyricSeedHooks.map((hook, i) => (
+                  <div
+                    key={i}
+                    className="text-[11px] font-mono text-neon-amber bg-neon-amber/5 border border-neon-amber/20 rounded px-2.5 py-1.5 leading-relaxed"
+                  >
+                    <span className="text-[9px] text-ink-500 mr-1.5">Hook {i + 1}:</span>
+                    {hook}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Suno metatags */}
+            <div className="space-y-1">
+              <span className="text-[9px] uppercase tracking-widest text-ink-500 font-semibold">Suno Bracket Tags — click to insert</span>
+              <div className="flex flex-wrap gap-1.5">
+                {generatedNarrative.sunoMetaTags.map(tag => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => injectNarrativeMetatag(tag)}
+                    className="text-[10px] font-mono px-2 py-1 rounded bg-neon-magenta/10 border border-neon-magenta/30 text-neon-magenta hover:bg-neon-magenta/20 transition cursor-pointer"
+                    title="Insert at cursor in Lyric Canvas"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-ink-700/40">
+              <button
+                type="button"
+                onClick={() => applyNarrativeToTheme(generatedNarrative)}
+                className="btn btn-primary !py-1 !px-2.5 !text-[11px] flex items-center gap-1.5"
+                title="Set this as the active Theme / Story Prompt"
+              >
+                <Wand2 className="w-3 h-3" />
+                Apply as Theme
+              </button>
+              <button
+                type="button"
+                onClick={() => injectNarrativeHooks(generatedNarrative)}
+                className="btn btn-ghost !py-1 !px-2.5 !text-[11px] border border-neon-amber/40 text-neon-amber hover:bg-neon-amber/10 flex items-center gap-1.5 transition"
+                title="Inject both seed hooks into the Lyric Canvas"
+              >
+                <ZapIcon className="w-3 h-3" />
+                Inject Seed Hooks
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4 text-ink-500 text-[11px] border border-dashed border-ink-700/40 rounded-lg">
+            Click <span className="text-neon-blue font-semibold">🎲 Roll Story / Topic</span> to generate a vivid, genre-aware narrative concept.
+            {state.genres.length > 0 && (
+              <span className="block mt-1 text-[10px] text-ink-600">
+                Active genre: <span className="text-neon-blue/70">{state.genres.join(' + ')}</span>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Controls grid */}
       <div className="grid sm:grid-cols-2 gap-3 mb-4">
         {/* Narrative Concept / Theme Archetype Selector */}
