@@ -29,6 +29,8 @@ export type GenerateParams = {
   regionalFlows: string[];
   deliveryDirectives: string[];
   fusedStyle?: FusedLyricContext;
+  /** Optional abort signal — if aborted the fetch is cancelled and the promise rejects with DOMException (AbortError). */
+  signal?: AbortSignal;
 };
 
 export type GenerateResult =
@@ -69,6 +71,7 @@ export async function generateLyricsViaEdge(params: GenerateParams): Promise<Gen
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
+      signal: params.signal,
       body: JSON.stringify({
         theme,
         scheme,
