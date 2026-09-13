@@ -9,8 +9,7 @@ import { AudioRemixStudio } from '@/components/AudioRemixStudio';
 import { SoundEffectsSection } from '@/components/sections/SoundEffectsSection';
 import { SectionArrangementBuilder } from '@/components/sections/SectionArrangementBuilder';
 import { LyricGeneratorSection } from '@/components/sections/LyricGeneratorSection';
-import { normalizePromptState, usePromptEngine } from '@/engine/usePromptEngine';
-import { applySurpriseRecipeToState, pickRandomSurpriseRecipe } from '@/data/surpriseMe';
+import { usePromptEngine } from '@/engine/usePromptEngine';
 import type { Preset } from '@/data/catalogs';
 
 type Tab = 'style' | 'lyrics' | 'remix' | 'export';
@@ -26,17 +25,6 @@ function App() {
 
   const handleEraSelect = (label: string) => eng.applyMicroGenreRecipe(label);
 
-  const handleSurprise = () => {
-    const recipe = pickRandomSurpriseRecipe();
-    const nextState = applySurpriseRecipeToState(eng.state, recipe);
-    eng.setState(normalizePromptState({ ...nextState, stylePromptOverride: '' }));
-    eng.setSurpriseTheme({
-      theme: recipe.theme,
-      structureId: recipe.structureId,
-      rhymeScheme: recipe.rhymeScheme,
-    });
-    eng.showToast(`Surprise! ${recipe.label}`);
-  };
 
   const copyPromptQuick = async () => {
     try {
@@ -75,7 +63,7 @@ function App() {
         <Header
           eng={eng}
           onReset={eng.reset}
-          onSurprise={handleSurprise}
+          onSurprise={eng.surpriseMe}
           onPresetSelect={handlePresetSelect}
           onOpenLicensing={() => setIsLicensingOpen(true)}
         />

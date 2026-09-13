@@ -14,10 +14,6 @@ import {
 } from '@/data/lyricBanks';
 import { cleanLyricText } from '@/engine/lyricEngine';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
-import {
-  applySurpriseRecipeToState,
-  pickRandomSurpriseRecipe,
-} from '@/data/surpriseMe';
 import { getAllTaxonomySubgenres, rollIntelligentGenreFusion } from '@/data/genreTaxonomy';
 import {
   MAX_BLEND_SLOTS,
@@ -912,18 +908,54 @@ export function usePromptEngine() {
     showToast(`Loaded blueprint: ${bp.name}`);
   }, [showToast]);
 
-  // ---- API-powered "Surprise Me" ----
-  // Picks a random genre blueprint (or fusion blend), calls the generate-theme
-  // edge function for a culturally accurate theme, then applies the full blueprint.
+  // ---- "Surprise Me" — uses the same dynamic fusion engine as the Genre dice button ----
+  // Replaces the old static-recipe approach: genres/subgenres are drawn from
+  // rollIntelligentGenreFusion() (Fisher-Yates + SUBGENRE_MAP, anti-cliché pairs),
+  // while vocals/instruments/mood are freshly randomised in the same setState call.
+  // The async Supabase theme-fetch is preserved so LyricGeneratorSection still gets
+  // an AI-generated theme when a network connection is available.
   const [surprising, setSurprising] = useState(false);
 
   const surpriseMe = useCallback(async () => {
     setSurprising(true);
     try {
-      const recipe = pickRandomSurpriseRecipe();
-      const nextState = applySurpriseRecipeToState(state, recipe);
+      // 1. Roll a fresh genre+subgenre fusion (truly random — no hardcoded pairings).
+      const fusion = rollIntelligentGenreFusion();
 
-      let theme = recipe.theme;
+      // 2. Local pick helpers (same pattern as per-section dice buttons).
+      const pick = <T,>(arr: T[], n: number): T[] =>
+        [...arr].sort(() => Math.random() - 0.5).slice(0, n);
+
+      const structures: SurpriseTheme['structureId'][] = [
+        'standard-pop', 'edm', 'hiphop', 'ballad', 'cinematic', 'neo-soul', 'cinematic-trailer',
+      ];
+      const rhymes: SurpriseTheme['rhymeScheme'][] = ['AABB', 'ABAB', 'AAAA', 'ABCB', 'Complex', 'Free'];
+
+      const structureId = structures[Math.floor(Math.random() * structures.length)];
+      const rhymeScheme = rhymes[Math.floor(Math.random() * rhymes.length)];
+
+      // 3. Build the new state in one batch — no multiple re-renders.
+      const primaryGenreLabel = GENRES.find(g => g.id === fusion.genres[0])?.label ?? 'Electronic';
+
+      const freshState: Partial<PromptState> = {
+        genres: fusion.genres,
+        subgenres: fusion.subgenres,
+        blend: 50 + Math.floor(Math.random() * 4) * 10,
+        instruments: pick(INSTRUMENTS, 2 + Math.floor(Math.random() * 3)).map(i => i.id),
+        customInstruments: [],
+        vocalTypes: pick(VOCAL_TYPES, 1).map(v => v.id),
+        vocalEffects: pick(VOCAL_EFFECTS, 1).map(v => v.id),
+        moods: pick(MOOD_TAGS, 2).map(m => m.id),
+        production: pick(PRODUCTION_TAGS, 2).map(p => p.id),
+        bpm: 70 + Math.floor(Math.random() * 9) * 10,
+        timeFeel: (['normal', 'half', 'double'] as TimeFeel[])[Math.floor(Math.random() * 3)],
+        artistArchetypes: pick(VOCAL_ARCHETYPES, 1 + Math.floor(Math.random() * MAX_BLEND_SLOTS)).map(a => a.id),
+        artistBlend: 55 + Math.floor(Math.random() * 3) * 10,
+        stylePromptOverride: '',
+      };
+
+      // 4. Optional AI-generated theme from Supabase (falls back gracefully).
+      let theme = `A ${primaryGenreLabel} journey through sound and emotion.`;
       try {
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-theme`, {
           method: 'POST',
@@ -931,30 +963,24 @@ export function usePromptEngine() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
           },
-          body: JSON.stringify({ genre: recipe.label }),
+          body: JSON.stringify({ genre: primaryGenreLabel }),
         });
         if (response.ok) {
           const data = await response.json();
-          if (data?.theme && typeof data.theme === 'string') {
-            theme = data.theme;
-          }
+          if (data?.theme && typeof data.theme === 'string') theme = data.theme;
         }
       } catch {
-        // Network error — fall back to recipe theme
+        // Network error — use the fallback theme string above.
       }
 
-      setState(normalizePromptState({ ...nextState, stylePromptOverride: '' }));
-      setSurpriseTheme({
-        theme,
-        structureId: recipe.structureId,
-        rhymeScheme: recipe.rhymeScheme,
-      });
-      showToast(`Surprise! ${recipe.label}`);
-      return { theme, recipe };
+      // 5. Apply, including subgenres in the allowlist so they survive normalizePromptState.
+      setState(prev => normalizePromptState({ ...prev, ...freshState }));
+      setSurpriseTheme({ theme, structureId, rhymeScheme });
+      showToast(`Surprise! ${primaryGenreLabel}${fusion.subgenres.length ? ' × ' + fusion.subgenres.join(' + ') : ''}`);
     } finally {
       setSurprising(false);
     }
-  }, [showToast, state]);
+  }, [showToast]);
 
   const pushHistory = useCallback(() => {
     setHistory(prev => [state, ...prev].slice(0, 24));
