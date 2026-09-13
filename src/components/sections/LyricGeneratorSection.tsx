@@ -18,6 +18,7 @@ import type { PromptEngine } from '@/engine/usePromptEngine';
 import {
   generateLyricsViaEdge, regenerateSectionLocal,
 } from '@/engine/lyricClient';
+import type { GenerateParams } from '@/engine/lyricClient';
 import {
   regeneratableSections, countSyllables,
   regenerateSelectionLocal, cleanLyricText, parseSections,
@@ -158,7 +159,7 @@ function escapeRegExpLocal(s: string): string {
 function safeRerollSection(
   lyrics: string,
   label: string,
-  params: Parameters<typeof regenerateSectionLocal>[1],
+  params: GenerateParams,
 ): string {
   const headerRe = new RegExp(`\\[${escapeRegExpLocal(label)}\\]`);
   if (!headerRe.test(lyrics)) return lyrics; // section doesn't exist, no-op
@@ -1363,6 +1364,126 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
           {genWarning}
         </div>
       )}
+
+      {/* ── Undo / Redo toolbar + Revision History drawer ──────────────────── */}
+      {(() => {
+        const history = lyricHistoryRef.current;
+        const idx = histIdxRef.current;
+        const canUndo = idx > 0;
+        const canRedo = idx < history.length - 1;
+        const hasHistory = history.length > 0;
+
+        return (
+          <div className="mb-3 space-y-2">
+            {/* Undo/Redo strip */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={undoLyric}
+                disabled={!canUndo}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-ink-700/60 bg-ink-850/60 text-ink-300 hover:bg-ink-700/50 hover:text-ink-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                title="Undo last lyric change (Ctrl+Z / Cmd+Z)"
+              >
+                <span className="text-base leading-none">↶</span> Undo
+              </button>
+              <button
+                type="button"
+                onClick={redoLyric}
+                disabled={!canRedo}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border border-ink-700/60 bg-ink-850/60 text-ink-300 hover:bg-ink-700/50 hover:text-ink-100 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                title="Redo (Ctrl+Y / Cmd+Shift+Z)"
+              >
+                <span className="text-base leading-none">↷</span> Redo
+              </button>
+              {hasHistory && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryDrawerOpen(o => !o)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition ${
+                    historyDrawerOpen
+                      ? 'border-neon-cyan/60 bg-neon-cyan/10 text-neon-cyan'
+                      : 'border-ink-700/60 bg-ink-850/60 text-ink-400 hover:text-ink-200 hover:border-ink-600'
+                  }`}
+                  title="View and restore previous lyric versions"
+                >
+                  <FileMusic className="w-3 h-3" />
+                  Revision History
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-ink-700/60">
+                    {history.length}
+                  </span>
+                </button>
+              )}
+              {hasHistory && (
+                <span className="text-[10px] text-ink-600 ml-auto">
+                  {idx + 1} / {history.length} &nbsp;·&nbsp; Ctrl+Z undo · Ctrl+Y redo
+                </span>
+              )}
+            </div>
+
+            {/* History drawer */}
+            {historyDrawerOpen && hasHistory && (
+              <div className="rounded-xl border border-ink-700/60 bg-ink-900/70 overflow-hidden animate-slideIn">
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-ink-700/40 bg-ink-850/60">
+                  <FileMusic className="w-3.5 h-3.5 text-neon-cyan" />
+                  <span className="text-[11px] font-bold text-ink-100 uppercase tracking-wider flex-1">
+                    Revision History
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryDrawerOpen(false)}
+                    className="text-ink-500 hover:text-ink-200 text-xs transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="max-h-52 overflow-y-auto divide-y divide-ink-800/40">
+                  {[...history].reverse().map((snap, ri) => {
+                    const realIdx = history.length - 1 - ri;
+                    const isCurrent = realIdx === idx;
+                    const d = new Date(snap.ts);
+                    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    return (
+                      <div
+                        key={`${snap.ts}-${ri}`}
+                        className={`flex items-center gap-3 px-3 py-2 hover:bg-ink-800/50 transition ${isCurrent ? 'bg-neon-cyan/5' : ''}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {isCurrent && (
+                              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 font-semibold">
+                                current
+                              </span>
+                            )}
+                            <span className={`text-[11px] font-medium truncate ${isCurrent ? 'text-neon-cyan' : 'text-ink-200'}`}>
+                              {snap.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[9px] text-ink-500 font-mono">{timeStr}</span>
+                            <span className="text-[9px] text-ink-600">·</span>
+                            <span className="text-[9px] text-ink-500">
+                              {snap.text.trim().split('\n').length} lines
+                            </span>
+                          </div>
+                        </div>
+                        {!isCurrent && (
+                          <button
+                            type="button"
+                            onClick={() => restoreSnapshot(realIdx)}
+                            className="shrink-0 px-2 py-1 rounded text-[10px] font-medium bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/20 transition"
+                          >
+                            Restore
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Scrollable Suno Metatag Shelf ───────────────────────────────────── */}
       <div className="mb-3">
