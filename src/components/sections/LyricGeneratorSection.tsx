@@ -254,11 +254,22 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   const [selectedNarrativeId, setSelectedNarrativeId] = useState<string>('');
 
   // ── Inline lyric toolkit state ───────────────────────────────────────────
-  // Section-level reroll
   const [inlineSectionRerolling, setInlineSectionRerolling] = useState<string | null>(null);
-  // Rhyme & rephrase popover
   const [rhymeSuggestions, setRhymeSuggestions] = useState<string[]>([]);
   const [rhymeWord, setRhymeWord] = useState('');
+  // ────────────────────────────────────────────────────────────────────────
+
+  // ── Lyric Undo / Redo history stack ─────────────────────────────────────
+  // We keep a parallel local snapshot stack separate from the global prompt
+  // history so undo/redo is scoped to just the Lyric Canvas workspace.
+  // Using refs for O(1) synchronous reads inside handlers, plus a state
+  // counter to force re-renders when the stack changes.
+  const lyricHistoryRef = useRef<LyricSnapshot[]>([]);
+  const histIdxRef = useRef<number>(-1);
+  const [histRenderTick, setHistRenderTick] = useState(0); // trigger UI updates
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
+  // Debounce timer — prevent a snapshot per keystroke during manual typing
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // ────────────────────────────────────────────────────────────────────────
 
   // ── Dynamic Narrative Matrix ─────────────────────────────────────────────
@@ -322,6 +333,64 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     () => fusedLyricContext(state.artistArchetypes, state.artistBlend),
     [state.artistArchetypes, state.artistBlend],
   );
+
+  // ── History helpers ──────────────────────────────────────────────────────
+  const pushLyricSnapshot = (text: string, label: string) => {
+    // Truncate any "future" entries that were undone
+    lyricHistoryRef.current = lyricHistoryRef.current.slice(0, histIdxRef.current + 1);
+    // Deduplicate: don't push if identical to current snapshot
+    const last = lyricHistoryRef.current[lyricHistoryRef.current.length - 1];
+    if (last && last.text === text) return;
+    lyricHistoryRef.current.push({ text, label, ts: Date.now() });
+    histIdxRef.current = lyricHistoryRef.current.length - 1;
+    setHistRenderTick(t => t + 1);
+  };
+
+  const undoLyric = () => {
+    if (histIdxRef.current <= 0) return;
+    histIdxRef.current -= 1;
+    const snap = lyricHistoryRef.current[histIdxRef.current];
+    if (snap) {
+      update('lyrics', snap.text);
+      setHistRenderTick(t => t + 1);
+      showToast(`↶ Undone — restored "${snap.label}"`);
+    }
+  };
+
+  const redoLyric = () => {
+    if (histIdxRef.current >= lyricHistoryRef.current.length - 1) return;
+    histIdxRef.current += 1;
+    const snap = lyricHistoryRef.current[histIdxRef.current];
+    if (snap) {
+      update('lyrics', snap.text);
+      setHistRenderTick(t => t + 1);
+      showToast(`↷ Redone — "${snap.label}"`);
+    }
+  };
+
+  const restoreSnapshot = (idx: number) => {
+    const snap = lyricHistoryRef.current[idx];
+    if (!snap) return;
+    histIdxRef.current = idx;
+    update('lyrics', snap.text);
+    setHistRenderTick(t => t + 1);
+    setHistoryDrawerOpen(false);
+    showToast(`Restored: "${snap.label}"`);
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
+  // Keyboard shortcuts: Ctrl+Z / Cmd+Z = undo, Ctrl+Y / Cmd+Shift+Z = redo
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); undoLyric(); }
+      else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); redoLyric(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const effectiveTone = tone ?? 'nostalgic';
   const effectiveScheme = scheme ?? 'ABAB';
@@ -491,8 +560,12 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
       if (state.duetMode) {
         processedLyrics = applyDuetVocalTags(processedLyrics, state.artistArchetypes);
       }
+      // Push the BEFORE snapshot so the user can undo back to what they had
+      if (state.lyrics.trim()) pushLyricSnapshot(state.lyrics, 'Before Full Generation');
       update('lyrics', processedLyrics);
       addRecentPrompt(processedLyrics);
+      // Push the AFTER snapshot as the new current
+      pushLyricSnapshot(processedLyrics, 'Full Generation');
       setGenSource(result.source);
       if (result.source === 'local' && result.warning) {
         setGenWarning(result.warning);
@@ -517,7 +590,7 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
 
   const handleRegenerate = () => {
     if (!regenTarget) { showToast('Pick a section to regenerate'); return; }
-    const next = regenerateSectionLocal(state.lyrics, regenTarget, {
+    const params = {
       theme: theme.trim() || 'a reflective song about transformation',
       scheme: effectiveScheme,
       tone: effectiveTone,
@@ -537,9 +610,12 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
       regionalFlows,
       deliveryDirectives,
       fusedStyle: fusion,
-    });
+    };
+    pushLyricSnapshot(state.lyrics, `Before [${regenTarget}] Regeneration`);
+    const next = safeRerollSection(state.lyrics, regenTarget, params);
     update('lyrics', next);
     addRecentPrompt(next);
+    pushLyricSnapshot(next, `[${regenTarget}] Regenerated`);
     showToast(`Regenerated ${regenTarget}`);
     setRegenOpen(false);
   };
@@ -569,9 +645,12 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
       deliveryDirectives,
       fusedStyle: fusion,
     });
-    update('lyrics', `${state.lyrics.slice(0, start)}${replacement}${state.lyrics.slice(end)}`);
+    pushLyricSnapshot(state.lyrics, 'Before Selection Rephrase');
+    const next = `${state.lyrics.slice(0, start)}${replacement}${state.lyrics.slice(end)}`;
+    update('lyrics', next);
     setSelectedRange({ start: start + replacement.length, end: start + replacement.length });
     addRecentPrompt(replacement);
+    pushLyricSnapshot(next, 'Selection Rephrased');
     showToast('Highlighted lyric regenerated');
   };
 
