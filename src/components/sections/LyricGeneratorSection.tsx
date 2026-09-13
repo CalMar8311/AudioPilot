@@ -1,10 +1,10 @@
 // AI Lyric Generator workspace — controls, enhanced editor, syllable gutter, regenerate
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileMusic, Sparkles, Copy, RefreshCw, Wand2, Plus, Type, Gauge, ChevronDown, Users, Dices, BookOpen, Zap as ZapIcon } from 'lucide-react';
+import { FileMusic, Sparkles, Copy, RefreshCw, Wand2, Plus, Type, Gauge, ChevronDown, Users, Dices, BookOpen, Zap as ZapIcon, ArrowUp, ArrowDown, Music2 as Rephrase, Hash } from 'lucide-react';
 import {
   STRUCTURE_TEMPLATES, TONE_OPTIONS, LANG_OPTIONS, RHYME_OPTIONS,
-  RHYME_SCHEME_IDS, REGIONAL_FLOWS, DELIVERY_DIRECTIVES,
+  RHYME_SCHEME_IDS, REGIONAL_FLOWS, DELIVERY_DIRECTIVES, RHYME_FAMILIES,
   randomThemeForGenre, NARRATIVE_THEMES, type NarrativeTheme,
   type RhymeScheme, type Tone, type Lang, type StructureId, type StructureTemplate,
 } from '@/data/lyricBanks';
@@ -20,7 +20,7 @@ import {
 } from '@/engine/lyricClient';
 import {
   regeneratableSections, countSyllables,
-  regenerateSelectionLocal, cleanLyricText,
+  regenerateSelectionLocal, cleanLyricText, parseSections,
 } from '@/engine/lyricEngine';
 import { Zap, Cpu, Radio, Mic2 } from 'lucide-react';
 
