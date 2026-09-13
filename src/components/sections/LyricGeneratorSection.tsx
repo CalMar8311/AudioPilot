@@ -204,27 +204,44 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     }
   }, [state.genres, structId]);
 
-  // Consume AI-generated theme from the "Surprise Me" engine
+  // Consume AI-generated theme from the "Surprise Me" engine.
+  // When autoGenerateLyrics is true, immediately invoke runGenerate() with the
+  // explicit param values (before React re-renders with the new state) so the
+  // user never needs to manually click "Generate Lyrics" after a Surprise roll.
   useEffect(() => {
-    if (surpriseTheme) {
-      setTheme(surpriseTheme.theme);
-      setStructId(surpriseTheme.structureId as StructureId);
-      setScheme(surpriseTheme.rhymeScheme as RhymeScheme);
-      if (surpriseTheme.lyricMetatags) {
-        update('lyrics', surpriseTheme.lyricMetatags);
-      }
-      // Also sync rhyme scheme and vocal styling from the applied blueprint
-      const bp = GENRE_BLUEPRINTS.find(b =>
-        state.genres[0] === b.primaryGenre &&
-        (!b.secondaryGenre || state.genres.includes(b.secondaryGenre))
-      );
-      if (bp) {
-        setScheme(bp.rhymeScheme as RhymeScheme);
-        if (bp.regionalFlows.length) setRegionalFlows(bp.regionalFlows);
-      }
-      setSurpriseTheme(null);
+    if (!surpriseTheme) return;
+
+    const newTheme    = surpriseTheme.theme;
+    const newStructId = surpriseTheme.structureId as StructureId;
+    const newScheme   = surpriseTheme.rhymeScheme as RhymeScheme;
+
+    setTheme(newTheme);
+    setStructId(newStructId);
+    setScheme(newScheme);
+
+    if (surpriseTheme.lyricMetatags) {
+      update('lyrics', surpriseTheme.lyricMetatags);
     }
-  }, [surpriseTheme, state.genres, setSurpriseTheme]);
+
+    // Sync rhyme scheme / flows from matching genre blueprint
+    const bp = GENRE_BLUEPRINTS.find(b =>
+      state.genres[0] === b.primaryGenre &&
+      (!b.secondaryGenre || state.genres.includes(b.secondaryGenre))
+    );
+    if (bp) {
+      setScheme(bp.rhymeScheme as RhymeScheme);
+      if (bp.regionalFlows.length) setRegionalFlows(bp.regionalFlows);
+    }
+
+    setSurpriseTheme(null);
+
+    // Auto-generate lyrics immediately — pass explicit values so we don't rely
+    // on React state that hasn't re-rendered yet.
+    if (surpriseTheme.autoGenerateLyrics) {
+      runGenerate({ theme: newTheme, structId: newStructId, scheme: newScheme });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surpriseTheme]);
 
   useEffect(() => {
     const labels = resolveArchetypes(state.artistArchetypes)
@@ -914,6 +931,17 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
           </p>
         )}
       </div>
+
+      {/* Surprise auto-generate status badge */}
+      {isLyricGenerating && (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-neon-blue/10 border border-neon-blue/40 text-neon-blue text-[11px] font-semibold animate-pulse">
+          <ZapIcon className="w-3.5 h-3.5 shrink-0" />
+          ⚡ Rolling Inspiration &amp; Writing Lyrics…
+          <span className="ml-auto text-[10px] font-normal text-ink-400">
+            Click "Surprise Me" again to cancel &amp; re-roll
+          </span>
+        </div>
+      )}
 
       {/* Generate button */}
       <div className="flex flex-wrap gap-2 mb-4">

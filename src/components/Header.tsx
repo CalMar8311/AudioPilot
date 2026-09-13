@@ -22,7 +22,7 @@ export function Header({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { loadPreset, applyBlueprint, surpriseMe, surprising } = eng;
+  const { loadPreset, applyBlueprint, surpriseMe, surprising, isLyricGenerating } = eng;
   const license = getCurrentLicense();
 
   useEffect(() => {
@@ -148,11 +148,19 @@ export function Header({
             type="button"
             className="btn btn-ghost !text-xs sm:!text-sm disabled:opacity-60"
             onClick={() => (onSurprise ?? surpriseMe)()}
-            disabled={surprising}
-            title="AI-powered contextual surprise — picks a genre, generates a theme, and configures everything"
+            disabled={surprising || isLyricGenerating}
+            title={
+              isLyricGenerating
+                ? 'Writing lyrics… click again to cancel & re-roll'
+                : 'AI-powered contextual surprise — picks a genre, generates a theme, and writes lyrics automatically'
+            }
           >
-            {surprising ? <Loader2 className="w-4 h-4 text-neon-magenta animate-spin" /> : <Shuffle className="w-4 h-4 text-neon-magenta" />}
-            <span className="hidden sm:inline">{surprising ? 'Surprising…' : 'Surprise Me'}</span>
+            {(surprising || isLyricGenerating)
+              ? <Loader2 className="w-4 h-4 text-neon-magenta animate-spin" />
+              : <Shuffle className="w-4 h-4 text-neon-magenta" />}
+            <span className="hidden sm:inline">
+              {surprising ? 'Surprising…' : isLyricGenerating ? 'Writing…' : 'Surprise Me'}
+            </span>
           </button>
 
           <button
