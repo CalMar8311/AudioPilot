@@ -657,7 +657,7 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   // ── Inline section reroll ───────────────────────────────────────────────
   const handleInlineSectionReroll = (label: string) => {
     setInlineSectionRerolling(label);
-    const next = regenerateSectionLocal(state.lyrics, label, {
+    const params = {
       theme: theme.trim() || 'a reflective, emotionally resonant song',
       scheme: effectiveScheme,
       tone: effectiveTone,
@@ -677,9 +677,12 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
       regionalFlows,
       deliveryDirectives,
       fusedStyle: fusion,
-    });
+    };
+    pushLyricSnapshot(state.lyrics, `Before [${label}] Reroll`);
+    const next = safeRerollSection(state.lyrics, label, params);
     update('lyrics', next);
     addRecentPrompt(next);
+    pushLyricSnapshot(next, `[${label}] Rerolled`);
     showToast(`🎲 Rerolled [${label}]`);
     setInlineSectionRerolling(null);
   };
@@ -687,7 +690,9 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   const handleMoveSectionInLyrics = (label: string, direction: 'up' | 'down') => {
     const next = reorderSectionInLyrics(state.lyrics, label, direction);
     if (next !== state.lyrics) {
+      pushLyricSnapshot(state.lyrics, `Before Move [${label}] ${direction}`);
       update('lyrics', next);
+      pushLyricSnapshot(next, `[${label}] Moved ${direction}`);
       showToast(`Moved [${label}] ${direction}`);
     }
   };
@@ -731,8 +736,11 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
       deliveryDirectives,
       fusedStyle: fusion,
     });
-    update('lyrics', `${state.lyrics.slice(0, start)}${replacement}${state.lyrics.slice(end)}`);
+    pushLyricSnapshot(state.lyrics, `Before Rephrase (${mode})`);
+    const next = `${state.lyrics.slice(0, start)}${replacement}${state.lyrics.slice(end)}`;
+    update('lyrics', next);
     setSelectedRange({ start: start + replacement.length, end: start + replacement.length });
+    pushLyricSnapshot(next, `Rephrased — ${mode}`);
     setRhymeSuggestions([]);
     showToast(`Rephrased — ${mode}`);
   };
@@ -1460,7 +1468,17 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
           <textarea
             ref={taRef}
             value={state.lyrics}
-            onChange={e => { update('lyrics', e.target.value); setRhymeSuggestions([]); }}
+            onChange={e => {
+              const val = e.target.value;
+              update('lyrics', val);
+              setRhymeSuggestions([]);
+              // Debounced snapshot: don't create a snapshot on every keystroke,
+              // but save a "Manual Edit" checkpoint ~1.5 s after typing stops.
+              if (debounceRef.current) clearTimeout(debounceRef.current);
+              debounceRef.current = setTimeout(() => {
+                if (val.trim()) pushLyricSnapshot(val, 'Manual Edit');
+              }, 1500);
+            }}
             onSelect={e => {
               setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value);
               setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd });
