@@ -16,6 +16,12 @@ import { cleanLyricText } from '@/engine/lyricEngine';
 import type { AudioAnalysisResult } from '@/services/geminiAudio';
 import { getAllTaxonomySubgenres, rollIntelligentGenreFusion } from '@/data/genreTaxonomy';
 import {
+  VOCAL_PERSONAS,
+  pickPersonaForGenre,
+  injectPersonaBracketTag,
+  clearPersonaBracketTags,
+} from '@/data/vocalPersonas';
+import {
   MAX_BLEND_SLOTS,
   compileArtistBlendPrompt,
   compileGenreBlendPrompt,
@@ -57,6 +63,8 @@ export type PromptState = {
   grooveFeel: string;
   mixSpatialTags: string[];
   stylePromptOverride: string;
+  /** Selected vocal persona ID (key of VOCAL_PERSONAS), or '' for none. */
+  vocalPersona: string;
 };
 
 export type PromptSnapshot = {
@@ -131,6 +139,7 @@ export function normalizePromptState(value: Partial<PromptState>): PromptState {
     grooveFeel: GROOVE_FEELS.some(tag => tag.id === value.grooveFeel) ? value.grooveFeel as string : '',
     stylePromptOverride: typeof value.stylePromptOverride === 'string' ? value.stylePromptOverride : '',
     lyrics: typeof value.lyrics === 'string' ? cleanLyricText(value.lyrics) : '',
+    vocalPersona: VOCAL_PERSONAS.some(p => p.id === value.vocalPersona) ? value.vocalPersona as string : '',
   };
 }
 
@@ -160,6 +169,7 @@ export const EMPTY_STATE: PromptState = {
   grooveFeel: '',
   mixSpatialTags: [],
   stylePromptOverride: '',
+  vocalPersona: '',
 };
 
 // ---- Blank canvas reset state used by Reset All ----
@@ -262,6 +272,7 @@ export function compileStylePrompt(s: PromptState): string {
     s.vocalTypes.length > 0 ||
     Boolean(s.vocalTimbre) ||
     s.vocalEffects.length > 0 ||
+    Boolean(s.vocalPersona) ||
     s.moods.length > 0 ||
     s.production.length > 0 ||
     s.musicalKeys.length > 0 ||
@@ -315,19 +326,23 @@ export function compileStylePrompt(s: PromptState): string {
   const timbre = labelFor(s.vocalTimbre ? [s.vocalTimbre] : [], VOCAL_TIMBRES);
   const vfx = labelFor(s.vocalEffects, VOCAL_EFFECTS);
   const vocalControl = 'smooth melodic singing, controlled vocal delivery';
-  
+  const activePersona = VOCAL_PERSONAS.find(p => p.id === s.vocalPersona);
+
   if (s.engineMode === 'suno') {
-    // Suno: front-load vocal descriptors
+    // Suno: front-load vocal descriptors (last unshift = position 0 in final string)
     if (hasAcousticDrums) parts.unshift(vocalControl);
     if (vtypes.length) parts.unshift(vtypes.join(', ') + ' vocals');
     if (vfx.length) parts.unshift(`${vfx.join(', ')} vocal processing`);
     if (timbre.length) parts.unshift(`${timbre[0]} vocal timbre`);
+    // Vocal Persona goes to the very front — most specific descriptor
+    if (activePersona) parts.unshift(activePersona.styleTags);
   } else {
     // Udio/MusicFX: standard placement
     if (hasAcousticDrums) parts.push(vocalControl);
     if (vtypes.length) parts.push(vtypes.join(', ') + ' vocals');
     if (vfx.length) parts.push(`${vfx.join(', ')} vocal processing`);
     if (timbre.length) parts.push(`${timbre[0]} vocal timbre`);
+    if (activePersona) parts.push(activePersona.styleTags);
   }
 
   const moods = labelFor(s.moods, MOOD_TAGS);
@@ -548,6 +563,7 @@ export function randomState(): PromptState {
     grooveFeel: '',
     mixSpatialTags: [],
     stylePromptOverride: '',
+    vocalPersona: pickPersonaForGenre(genres),
   };
 }
 
@@ -656,6 +672,29 @@ export function usePromptEngine() {
       [key]: value,
       ...(key === 'stylePromptOverride' ? {} : { stylePromptOverride: '' }),
     }));
+  }, []);
+
+  /**
+   * Atomically selects (or deselects) a vocal persona AND injects / removes
+   * its bracket cue tag from the active lyrics in a single setState call.
+   */
+  const selectVocalPersona = useCallback((personaId: string) => {
+    setState(prev => {
+      const isSame = prev.vocalPersona === personaId;
+      const newPersonaId = isSame ? '' : personaId;
+      const persona = VOCAL_PERSONAS.find(p => p.id === personaId);
+
+      let newLyrics = prev.lyrics;
+      if (isSame) {
+        // Deselecting — strip the bracket tag
+        newLyrics = clearPersonaBracketTags(prev.lyrics);
+      } else if (persona && prev.lyrics.trim()) {
+        // Selecting — inject the bracket tag after the first section header
+        newLyrics = injectPersonaBracketTag(prev.lyrics, persona.bracketTag);
+      }
+
+      return { ...prev, vocalPersona: newPersonaId, lyrics: newLyrics, stylePromptOverride: '' };
+    });
   }, []);
 
   const setEngineMode = useCallback((mode: EngineMode) => {
@@ -1054,7 +1093,7 @@ export function usePromptEngine() {
   const meta = useMemo(() => promptMeta(stylePrompt), [stylePrompt]);
 
   return {
-    state, setState, update, toggleArray,
+    state, setState, update, toggleArray, selectVocalPersona,
     audioState, setAudioState, setAudioFile, setAudioAnalysis, setAudioIsAnalyzing, setSelectedDirectionId, setRerollCount,
     addCustomInstrument, removeCustomInstrument,
     loadPreset, savePreset, deletePreset,
