@@ -112,36 +112,107 @@ function findRhymesForWord(word: string): string[] {
   return Array.from(hits).filter(w => w !== clean).slice(0, 8);
 }
 
-// ── Section block splitter (for reorder / inline reroll) ────────────────────
-interface LyricBlock { label: string | null; text: string }
+// ── Section block parser for the structured card editor ─────────────────────
+/**
+ * Structural section headers that get their own editable card.
+ * Anything else (inline cues like [Whispered], [Belting]) stays in the body.
+ */
+const STRUCTURAL_LABEL_RE = /^(?:Intro|Verse\s*\d*|Chorus\s*\d*|Bridge|Pre-Chorus|Hook|Outro)/i;
 
-function splitIntoBlocks(lyrics: string): LyricBlock[] {
+interface SectionBlock {
+  /** Unique id within this parse: "${label}-${occurrenceIndex}" */
+  id: string;
+  /** Text inside the brackets, e.g. "Verse 1", "Chorus" */
+  label: string;
+  /** Full bracket header line as it appears in lyrics, e.g. "[Verse 1]" */
+  header: string;
+  /** Section content — all lines after the header, including inline cue tags */
+  body: string;
+  /** True when label matches Chorus or Chorus N */
+  isChorus: boolean;
+  /** True for structural sections (verses, choruses, bridge …) — these get cards */
+  isStructural: boolean;
+}
+
+/**
+ * Splits lyrics into structural blocks.
+ * Everything before the first structural header becomes a "preamble" block
+ * (preserved in assembly but shown without a card).
+ */
+function parseSectionBlocks(lyrics: string): SectionBlock[] {
   const lines = lyrics.split('\n');
-  const blocks: LyricBlock[] = [];
-  let current: LyricBlock = { label: null, text: '' };
+  const blocks: SectionBlock[] = [];
+  const labelCounts: Record<string, number> = {};
+  let curLabel: string | null = null;
+  let curHeader = '';
+  let bodyLines: string[] = [];
+
+  const flush = () => {
+    const isStructural = curLabel !== null;
+    const label = curLabel ?? '__preamble__';
+    const body = bodyLines.join('\n').trimEnd();
+    if (isStructural || body.trim()) {
+      const count = labelCounts[label] ?? 0;
+      labelCounts[label] = count + 1;
+      blocks.push({
+        id: `${label}-${count}`,
+        label,
+        header: curHeader,
+        body,
+        isChorus: /^chorus(\s*\d+)?$/i.test(label.trim()),
+        isStructural,
+      });
+    }
+    curLabel = null;
+    curHeader = '';
+    bodyLines = [];
+  };
+
   for (const line of lines) {
     const m = line.match(/^\[([^\]]+)\]$/);
-    const isHeader = m && !line.includes(' ') === false && m[1].trim().length > 0;
-    if (isHeader) {
-      if (current.label !== null || current.text.trim()) blocks.push(current);
-      current = { label: m![1], text: line };
+    if (m && STRUCTURAL_LABEL_RE.test(m[1].trim())) {
+      flush();
+      curLabel = m[1].trim();
+      curHeader = line;
     } else {
-      current = { ...current, text: current.text ? current.text + '\n' + line : line };
+      bodyLines.push(line);
     }
   }
-  if (current.label !== null || current.text.trim()) blocks.push(current);
+  flush();
   return blocks;
 }
 
+/**
+ * Reassembles the full lyrics string from the block list, substituting
+ * per-block draft edits. Non-structural (preamble) blocks are preserved as-is.
+ * Blocks are separated by blank lines so the raw textarea stays clean.
+ */
+function assembleSectionBlocks(
+  blocks: SectionBlock[],
+  drafts: Record<string, string>,
+): string {
+  return blocks
+    .map(b => {
+      const body = (drafts[b.id] !== undefined ? drafts[b.id] : b.body).trimEnd();
+      if (b.isStructural) {
+        return body ? `${b.header}\n${body}` : b.header;
+      }
+      return body; // preamble — keep as-is
+    })
+    .filter(s => s.trim())
+    .join('\n\n');
+}
+
 function reorderSectionInLyrics(lyrics: string, label: string, direction: 'up' | 'down'): string {
-  const blocks = splitIntoBlocks(lyrics);
-  const idx = blocks.findIndex(b => b.label === label);
+  // Re-use parseSectionBlocks so reordering is consistent with card IDs
+  const blocks = parseSectionBlocks(lyrics);
+  const idx = blocks.findIndex(b => b.label === label && b.isStructural);
   if (idx < 0) return lyrics;
   const target = direction === 'up' ? idx - 1 : idx + 1;
   if (target < 0 || target >= blocks.length) return lyrics;
   const next = [...blocks];
   [next[idx], next[target]] = [next[target], next[idx]];
-  return next.map(b => b.text).join('\n');
+  return assembleSectionBlocks(next, {});
 }
 
 // ── Defensive section-reroll wrapper ────────────────────────────────────────
@@ -255,9 +326,27 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   const [selectedNarrativeId, setSelectedNarrativeId] = useState<string>('');
 
   // ── Inline lyric toolkit state ───────────────────────────────────────────
+  // inlineSectionRerolling accepts either a section label (legacy) or block id
   const [inlineSectionRerolling, setInlineSectionRerolling] = useState<string | null>(null);
   const [rhymeSuggestions, setRhymeSuggestions] = useState<string[]>([]);
   const [rhymeWord, setRhymeWord] = useState('');
+
+  // ── Section card editor state ────────────────────────────────────────────
+  /**
+   * Per-block draft bodies: Record<blockId, draftText>.
+   * Populated/reset whenever `state.lyrics` changes from an external source.
+   * Committed to `state.lyrics` on textarea onBlur.
+   */
+  const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
+  /** When true, editing or rerolling ANY chorus card updates ALL chorus blocks. */
+  const [syncChoruses, setSyncChoruses] = useState(true);
+  /**
+   * Tracks the last lyrics value we committed ourselves (via `commitSectionEdit`
+   * or `handleSectionCardReroll`), so the reset-on-external-change effect can
+   * distinguish our own commits from external updates (generate, undo, etc.).
+   */
+  const lastSyncedLyricsRef = useRef('');
+  // ─────────────────────────────────────────────────────────────────────────
   // ────────────────────────────────────────────────────────────────────────
 
   // ── Lyric Undo / Redo history stack ─────────────────────────────────────
@@ -335,6 +424,9 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     [state.artistArchetypes, state.artistBlend],
   );
 
+  /** Parsed structural section blocks — updates whenever state.lyrics changes */
+  const parsedBlocks = useMemo(() => parseSectionBlocks(state.lyrics), [state.lyrics]);
+
   // ── History helpers ──────────────────────────────────────────────────────
   const pushLyricSnapshot = (text: string, label: string) => {
     // Truncate any "future" entries that were undone
@@ -392,6 +484,19 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     return () => document.removeEventListener('keydown', onKeyDown);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-initialise sectionDrafts when lyrics change from an external source
+  // (full generation, undo/redo, Surprise Me, reset, etc.).
+  // We distinguish external changes from our own commits via lastSyncedLyricsRef.
+  useEffect(() => {
+    if (state.lyrics !== lastSyncedLyricsRef.current) {
+      const blocks = parseSectionBlocks(state.lyrics);
+      const fresh: Record<string, string> = {};
+      blocks.forEach(b => { if (b.isStructural) fresh[b.id] = b.body; });
+      setSectionDrafts(fresh);
+      lastSyncedLyricsRef.current = state.lyrics;
+    }
+  }, [state.lyrics]);
 
   const effectiveTone = tone ?? 'nostalgic';
   const effectiveScheme = scheme ?? 'ABAB';
@@ -697,6 +802,112 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
       showToast(`Moved [${label}] ${direction}`);
     }
   };
+
+  // ── Section Card Editor handlers ─────────────────────────────────────────
+
+  /**
+   * Called on textarea onBlur.  Assembles all blocks from current drafts,
+   * syncs chorus blocks if enabled, and commits to state.lyrics in one update.
+   */
+  const commitSectionEdit = (block: SectionBlock, newBody: string) => {
+    let committed: Record<string, string> = { ...sectionDrafts, [block.id]: newBody };
+
+    // Chorus sync: propagate the new body to every other chorus block's draft
+    if (syncChoruses && block.isChorus) {
+      parsedBlocks.filter(b => b.isChorus && b.id !== block.id).forEach(b => {
+        committed[b.id] = newBody;
+      });
+    }
+
+    setSectionDrafts(committed);
+    const assembled = assembleSectionBlocks(parsedBlocks, committed);
+    if (assembled === state.lyrics) return; // nothing actually changed
+
+    pushLyricSnapshot(state.lyrics, `Before [${block.label}] Edit`);
+    update('lyrics', assembled);
+    // Mark this as our own commit so the reset-effect doesn't fire
+    lastSyncedLyricsRef.current = assembled;
+    pushLyricSnapshot(assembled, `[${block.label}] Edited`);
+  };
+
+  /**
+   * Rewrites a single card's block via the local lyric engine, then optionally
+   * syncs the result to all chorus blocks.  Works per-block (uses a snippet
+   * approach so it never accidentally rerolls the wrong chorus occurrence).
+   */
+  const handleSectionCardReroll = (block: SectionBlock) => {
+    setInlineSectionRerolling(block.id);
+
+    const params: GenerateParams = {
+      theme: theme.trim() || 'a reflective, emotionally resonant song',
+      scheme: effectiveScheme,
+      tone: effectiveTone,
+      lang,
+      structure,
+      studioContext: {
+        genres: state.genres,
+        instruments: state.instruments,
+        vocalTypes: state.vocalTypes,
+        moods: state.moods,
+        bpm: state.bpm,
+        blend: state.blend,
+        artistArchetypes: state.artistArchetypes,
+        artistBlend: state.artistBlend,
+      },
+      vocalArchetypes: state.artistArchetypes,
+      regionalFlows,
+      deliveryDirectives,
+      fusedStyle: fusion,
+    };
+
+    // Build a one-section snippet so safeRerollSection rewrites exactly this block
+    const snippet = `[${block.label}]\n${sectionDrafts[block.id] ?? block.body}`;
+    const rerolled = safeRerollSection(snippet, block.label, params);
+    const rerolledBody =
+      parseSectionBlocks(rerolled).find(b => b.isStructural)?.body ?? (sectionDrafts[block.id] ?? block.body);
+
+    let committed: Record<string, string> = { ...sectionDrafts };
+    if (syncChoruses && block.isChorus) {
+      parsedBlocks.filter(b => b.isChorus).forEach(b => { committed[b.id] = rerolledBody; });
+    } else {
+      committed[block.id] = rerolledBody;
+    }
+
+    setSectionDrafts(committed);
+    const assembled = assembleSectionBlocks(parsedBlocks, committed);
+    pushLyricSnapshot(state.lyrics, `Before [${block.label}] Reroll`);
+    update('lyrics', assembled);
+    lastSyncedLyricsRef.current = assembled;
+    addRecentPrompt(assembled);
+    pushLyricSnapshot(assembled, `[${block.label}] Rerolled`);
+    showToast(
+      `🎲 Rerolled [${block.label}]${syncChoruses && block.isChorus ? ' — all choruses synced' : ''}`,
+    );
+    setInlineSectionRerolling(null);
+  };
+
+  /**
+   * Flushes any pending card drafts, then moves the block up or down.
+   * Because we don't set lastSyncedLyricsRef, the useEffect will reset
+   * sectionDrafts from the newly ordered lyrics on the next render.
+   */
+  const handleSectionCardMove = (block: SectionBlock, direction: 'up' | 'down') => {
+    // Flush pending card drafts first so no edits are lost in the reorder
+    const currentLyrics =
+      Object.keys(sectionDrafts).length > 0
+        ? assembleSectionBlocks(parsedBlocks, sectionDrafts)
+        : state.lyrics;
+
+    const next = reorderSectionInLyrics(currentLyrics, block.label, direction);
+    if (next !== currentLyrics) {
+      pushLyricSnapshot(state.lyrics, `Before Move [${block.label}] ${direction}`);
+      update('lyrics', next);
+      // intentionally NOT setting lastSyncedLyricsRef so the effect resets drafts
+      pushLyricSnapshot(next, `[${block.label}] Moved ${direction}`);
+      showToast(`Moved [${block.label}] ${direction}`);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Rhyme & rephrase popover ─────────────────────────────────────────────
   const handleFindRhymes = () => {
@@ -1620,82 +1831,190 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
           />
         </div>
 
-        {/* Right: Section Editor with inline Reroll + ▲▼ */}
+        {/* Right: Section Card Editor — one editable card per structural section */}
         <div className="rounded-lg bg-ink-950/40 border border-ink-700/40 flex flex-col max-h-[520px]">
+          {/* Panel header */}
           <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ink-700/40 shrink-0">
             <FileMusic className="w-3 h-3 text-ink-400" />
-            <span className="text-[10px] uppercase tracking-widest text-ink-400 flex-1">Section Editor</span>
-            <span className="text-[9px] text-ink-600">🎲 reroll · ▲▼ reorder</span>
+            <span className="text-[10px] uppercase tracking-widest text-ink-400 flex-1">Section Cards</span>
+            {/* Chorus sync toggle */}
+            <button
+              type="button"
+              onClick={() => setSyncChoruses(s => !s)}
+              className={`flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded border transition ${
+                syncChoruses
+                  ? 'border-neon-magenta/50 bg-neon-magenta/10 text-neon-magenta'
+                  : 'border-ink-700/50 bg-ink-800/40 text-ink-500 hover:text-ink-300'
+              }`}
+              title="When ON, editing or rerolling any chorus card syncs all chorus blocks automatically"
+            >
+              🔗 Sync Choruses
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          {/* Card list */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {(() => {
-              const sections = parseSections(state.lyrics);
-              if (!sections.length) {
+              const structural = parsedBlocks.filter(b => b.isStructural);
+
+              if (!structural.length) {
                 return (
                   <div className="text-center py-6">
                     <p className="text-[11px] text-ink-500 italic">
                       Generate or write lyrics with bracket sections<br />
-                      <span className="text-[10px] text-ink-600">e.g. [Verse 1], [Chorus], [Bridge]</span>
+                      <span className="text-[10px] text-ink-600">
+                        e.g. [Verse 1], [Chorus], [Bridge]
+                      </span>
                     </p>
-                    <div className="mt-2 text-ink-200 lyrics-view text-[11px] text-left px-2 max-h-48 overflow-auto">
-                      {state.lyrics.trim() ? renderHighlighted(state.lyrics) : null}
-                    </div>
+                    {state.lyrics.trim() && (
+                      <div className="mt-2 text-ink-200 lyrics-view text-[11px] text-left px-2 max-h-48 overflow-auto">
+                        {renderHighlighted(state.lyrics)}
+                      </div>
+                    )}
                   </div>
                 );
               }
-              return sections.map((sec, idx) => {
-                const sectionText = state.lyrics.slice(sec.start, sec.end).trim();
-                const lineCount = sectionText.split('\n').filter(l => !l.startsWith('[')).length;
-                const isRerolling = inlineSectionRerolling === sec.label;
+
+              return structural.map((block, idx) => {
+                const isRerolling = inlineSectionRerolling === block.id;
+
+                // Identify primary chorus so secondary ones can mirror it
+                const primaryChorus = structural.find(b => b.isChorus);
+                const isSecondaryChorus =
+                  syncChoruses && block.isChorus && primaryChorus?.id !== block.id;
+
+                // Display body: secondary chorus mirrors primary chorus draft
+                const displayBody = isSecondaryChorus && primaryChorus
+                  ? (sectionDrafts[primaryChorus.id] ?? primaryChorus.body)
+                  : (sectionDrafts[block.id] ?? block.body);
+
+                const originalBody = block.body;
+                const isDirty = !isSecondaryChorus && displayBody !== originalBody;
+                const lineCount = displayBody
+                  .split('\n')
+                  .filter(l => l.trim() && !l.startsWith('[')).length;
+                const textareaHeight = Math.max(72, displayBody.split('\n').length * 20);
+
                 return (
                   <div
-                    key={`${sec.label}-${idx}`}
-                    className="rounded-lg border border-ink-700/50 bg-ink-900/50 overflow-hidden"
+                    key={block.id}
+                    className={`rounded-xl border overflow-hidden transition-shadow ${
+                      block.isChorus
+                        ? 'border-neon-magenta/40 bg-neon-magenta/5 shadow-[0_0_8px_rgba(236,72,153,0.08)]'
+                        : 'border-ink-700/50 bg-ink-900/40'
+                    }`}
                   >
-                    {/* Section header bar */}
-                    <div className="flex items-center gap-1 px-2 py-1.5 bg-ink-800/50 border-b border-ink-700/40">
-                      <span className="text-[11px] font-bold text-neon-cyan flex-1 truncate">
-                        [{sec.label}]
+                    {/* Card header bar */}
+                    <div className={`flex items-center gap-1 px-2 py-1.5 border-b ${
+                      block.isChorus
+                        ? 'bg-neon-magenta/10 border-neon-magenta/20'
+                        : 'bg-ink-800/50 border-ink-700/40'
+                    }`}>
+                      {/* Section label */}
+                      <span className={`text-[11px] font-bold flex-1 min-w-0 truncate ${
+                        block.isChorus ? 'text-neon-magenta' : 'text-neon-cyan'
+                      }`}>
+                        [{block.label}]
                       </span>
-                      <span className="text-[9px] text-ink-500">{lineCount} lines</span>
-                      {/* ▲ move up */}
+
+                      {/* Badges */}
+                      {isSecondaryChorus && (
+                        <span className="shrink-0 text-[8px] px-1 py-0.5 rounded bg-neon-magenta/20 text-neon-magenta/80 border border-neon-magenta/30">
+                          🔗 synced
+                        </span>
+                      )}
+                      {isDirty && (
+                        <span
+                          className="shrink-0 w-1.5 h-1.5 rounded-full bg-neon-amber"
+                          title="Unsaved draft — will commit on blur"
+                        />
+                      )}
+                      <span className="text-[9px] text-ink-500 shrink-0">{lineCount}L</span>
+
+                      {/* ▲ Move up */}
                       <button
                         type="button"
                         disabled={idx === 0}
-                        onClick={() => handleMoveSectionInLyrics(sec.label, 'up')}
+                        onClick={() => handleSectionCardMove(block, 'up')}
                         className="p-0.5 rounded text-ink-500 hover:text-ink-200 disabled:opacity-25 transition"
-                        title={`Move [${sec.label}] up`}
+                        title={`Move [${block.label}] up`}
                       >
                         <ArrowUp className="w-3 h-3" />
                       </button>
-                      {/* ▼ move down */}
+
+                      {/* ▼ Move down */}
                       <button
                         type="button"
-                        disabled={idx === sections.length - 1}
-                        onClick={() => handleMoveSectionInLyrics(sec.label, 'down')}
+                        disabled={idx === structural.length - 1}
+                        onClick={() => handleSectionCardMove(block, 'down')}
                         className="p-0.5 rounded text-ink-500 hover:text-ink-200 disabled:opacity-25 transition"
-                        title={`Move [${sec.label}] down`}
+                        title={`Move [${block.label}] down`}
                       >
                         <ArrowDown className="w-3 h-3" />
                       </button>
-                      {/* 🎲 reroll */}
+
+                      {/* 🎲 Reroll */}
                       <button
                         type="button"
-                        disabled={isRerolling}
-                        onClick={() => handleInlineSectionReroll(sec.label)}
-                        className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/20 disabled:opacity-40 transition shrink-0"
-                        title={`Reroll [${sec.label}]`}
+                        disabled={!!isRerolling || isSecondaryChorus}
+                        onClick={() => handleSectionCardReroll(block)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-medium border transition shrink-0 ${
+                          isSecondaryChorus
+                            ? 'border-ink-700/30 bg-ink-800/20 text-ink-600 cursor-not-allowed'
+                            : 'bg-neon-cyan/10 border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/20 disabled:opacity-40'
+                        }`}
+                        title={
+                          isSecondaryChorus
+                            ? 'Reroll the first chorus card — it will sync here automatically'
+                            : `Reroll [${block.label}]${syncChoruses && block.isChorus ? ' (all choruses will sync)' : ''}`
+                        }
                       >
                         {isRerolling ? '…' : '🎲'}
                       </button>
                     </div>
-                    {/* Section body preview */}
-                    <div className="px-2 py-1.5 text-[11px] text-ink-300 leading-relaxed max-h-28 overflow-hidden">
-                      {sectionText.split('\n').filter(l => !l.startsWith('[')).slice(0, 5).map((line, li) => (
-                        <div key={li} className="truncate">{line || '\u00a0'}</div>
-                      ))}
-                    </div>
+
+                    {/* Card body */}
+                    {isSecondaryChorus ? (
+                      /* Read-only mirror for synced secondary choruses */
+                      <div className="px-2 py-2 bg-neon-magenta/3">
+                        <p className="text-[8px] text-neon-magenta/50 italic mb-1.5">
+                          ↕ Mirrors primary chorus — edit the first [Chorus] card
+                        </p>
+                        <div className="text-[11px] text-ink-400 leading-relaxed font-mono max-h-28 overflow-hidden">
+                          {displayBody
+                            .split('\n')
+                            .filter(l => l.trim())
+                            .slice(0, 6)
+                            .map((line, li) => (
+                              <div key={li} className="truncate opacity-70">{line}</div>
+                            ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <textarea
+                        value={displayBody}
+                        onChange={e => {
+                          const v = e.target.value;
+                          if (syncChoruses && block.isChorus) {
+                            // Live-sync all chorus drafts while the user types
+                            setSectionDrafts(prev => {
+                              const next = { ...prev };
+                              parsedBlocks
+                                .filter(b => b.isChorus)
+                                .forEach(b => { next[b.id] = v; });
+                              return next;
+                            });
+                          } else {
+                            setSectionDrafts(prev => ({ ...prev, [block.id]: v }));
+                          }
+                        }}
+                        onBlur={e => commitSectionEdit(block, e.target.value)}
+                        className="w-full bg-transparent border-0 p-2 text-[12px] text-ink-200 focus:outline-none resize-none leading-relaxed font-mono focus:bg-ink-900/30 transition-colors"
+                        style={{ minHeight: textareaHeight }}
+                        placeholder={`Write [${block.label}] lyrics here…`}
+                        spellCheck={false}
+                      />
+                    )}
                   </div>
                 );
               });
