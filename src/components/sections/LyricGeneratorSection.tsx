@@ -89,8 +89,16 @@ function renderHighlighted(text: string) {
 }
 
 export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
-  const { state, update, showToast, surpriseTheme, setSurpriseTheme, toggleDuetMode, addRecentPrompt, setLyricsCursor } = eng;
+  const {
+    state, update, showToast,
+    surpriseTheme, setSurpriseTheme,
+    toggleDuetMode, addRecentPrompt, setLyricsCursor,
+    isLyricGenerating, setIsLyricGenerating,
+  } = eng;
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // Abort controller for in-flight lyric generation requests.
+  // Rapid "Surprise Me" clicks will cancel the previous fetch and start fresh.
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Generator params (local state)
   // Keep these truly optional so the user can clear them and return to a blank canvas.
@@ -257,18 +265,47 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
 
   const regenSections = useMemo(() => regeneratableSections(state.lyrics), [state.lyrics]);
 
-  const handleGenerate = async () => {
-    const activeTheme = theme.trim();
+  /**
+   * Core generation routine. Accepts optional `overrides` so it can be called
+   * immediately from the surpriseTheme effect (before React state updates settle)
+   * with the explicit values that were just applied.
+   *
+   * Cancels any in-flight request via AbortController before starting a new one,
+   * so rapid "Surprise Me" clicks never stack up.
+   */
+  const runGenerate = async (overrides?: {
+    theme?: string;
+    structId?: StructureId;
+    scheme?: RhymeScheme;
+  }) => {
+    const activeTheme = (overrides?.theme ?? theme).trim();
     if (!activeTheme) { showToast('Enter a theme or story first'); return; }
+
+    // Cancel any previous in-flight fetch
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Resolve the generation parameters — use overrides where provided so we don't
+    // depend on React state updates that haven't rendered yet.
+    const activeStructId = overrides?.structId ?? structId ?? effectiveStructureId;
+    const activeScheme   = overrides?.scheme   ?? effectiveScheme;
+    const activeStructure =
+      STRUCTURE_TEMPLATES.find(s => s.id === activeStructId) ?? STRUCTURE_TEMPLATES[0];
+
     setGenerating(true);
+    setIsLyricGenerating(true);
     setGenWarning(null);
+
     try {
       const result = await generateLyricsViaEdge({
         theme: activeTheme,
-        scheme: effectiveScheme,
+        scheme: activeScheme,
         tone: effectiveTone,
         lang,
-        structure,
+        structure: activeStructure,
         studioContext: {
           genres: state.genres,
           instruments: state.instruments,
@@ -283,15 +320,16 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         regionalFlows,
         deliveryDirectives,
         fusedStyle: fusion,
+        signal: controller.signal,
       });
-      
+
+      // If another request already cancelled this one, silently discard.
+      if (controller.signal.aborted) return;
+
       let processedLyrics = result.lyrics;
-      
-      // Apply duet mode alternating vocal tags
       if (state.duetMode) {
         processedLyrics = applyDuetVocalTags(processedLyrics, state.artistArchetypes);
       }
-      
       update('lyrics', processedLyrics);
       addRecentPrompt(processedLyrics);
       setGenSource(result.source);
@@ -299,14 +337,22 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         setGenWarning(result.warning);
         showToast(result.warning);
       } else {
-        showToast('Lyrics generated');
+        showToast('✨ Lyrics generated');
       }
-    } catch {
+    } catch (err) {
+      // AbortError is expected on cancel — don't show an error toast.
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       showToast('Generation failed — try again');
     } finally {
-      setGenerating(false);
+      if (!controller.signal.aborted) {
+        setGenerating(false);
+        setIsLyricGenerating(false);
+      }
     }
   };
+
+  // Thin wrapper keeps the existing call-sites unchanged.
+  const handleGenerate = () => runGenerate();
 
   const handleRegenerate = () => {
     if (!regenTarget) { showToast('Pick a section to regenerate'); return; }

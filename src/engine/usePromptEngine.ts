@@ -71,6 +71,8 @@ export type SurpriseTheme = {
   structureId: string;
   rhymeScheme: string;
   lyricMetatags?: string;
+  /** When true, LyricGeneratorSection will auto-trigger lyric generation immediately after applying this theme. */
+  autoGenerateLyrics?: boolean;
 };
 
 export type AudioReferenceState = {
@@ -559,6 +561,8 @@ export function usePromptEngine() {
   const [recentPrompts, setRecentPrompts] = useState<PromptSnapshot[]>(() => loadSnapshots(RECENT_KEY));
   const [toast, setToast] = useState<string | null>(null);
   const [surpriseTheme, setSurpriseTheme] = useState<SurpriseTheme | null>(null);
+  // Exposed so Header can disable the "Surprise Me" button while lyrics are being written.
+  const [isLyricGenerating, setIsLyricGenerating] = useState(false);
   // Incremented by reset() so that App.tsx can key local-state components off this value,
   // forcing them to remount (and re-initialise their own useState defaults) atomically.
   const [resetKey, setResetKey] = useState(0);
@@ -999,7 +1003,9 @@ export function usePromptEngine() {
 
       // 5. Apply, including subgenres in the allowlist so they survive normalizePromptState.
       setState(prev => normalizePromptState({ ...prev, ...freshState }));
-      setSurpriseTheme({ theme, structureId, rhymeScheme });
+      // autoGenerateLyrics: true tells LyricGeneratorSection to immediately begin
+      // writing lyrics as soon as it consumes this theme, without a second click.
+      setSurpriseTheme({ theme, structureId, rhymeScheme, autoGenerateLyrics: true });
       showToast(`Surprise! ${primaryGenreLabel}${fusion.subgenres.length ? ' × ' + fusion.subgenres.join(' + ') : ''}`);
     } finally {
       setSurprising(false);
@@ -1057,6 +1063,7 @@ export function usePromptEngine() {
     randomize, reset, resetKey,
     randomizeGenres, randomizeVocals, randomizeArtistArchetypes, randomizeInstruments, randomizeMoodTempo,
     applyBlueprint, surpriseMe, surprising, surpriseTheme, setSurpriseTheme,
+    isLyricGenerating, setIsLyricGenerating,
     pushHistory, loadHistoryItem,
     insertLyricTag,
     setLyricsCursor,
