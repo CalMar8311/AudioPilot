@@ -143,6 +143,54 @@ function reorderSectionInLyrics(lyrics: string, label: string, direction: 'up' |
   return next.map(b => b.text).join('\n');
 }
 
+// ── Defensive section-reroll wrapper ────────────────────────────────────────
+function escapeRegExpLocal(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Wraps regenerateSectionLocal with three safety guards:
+ * 1. Section header must exist in the lyrics before attempting reroll.
+ * 2. The generated replacement must be non-empty.
+ * 3. The generated replacement must still contain the section header —
+ *    if the engine strips it, fall back to the original to prevent data loss.
+ */
+function safeRerollSection(
+  lyrics: string,
+  label: string,
+  params: Parameters<typeof regenerateSectionLocal>[1],
+): string {
+  const headerRe = new RegExp(`\\[${escapeRegExpLocal(label)}\\]`);
+  if (!headerRe.test(lyrics)) return lyrics; // section doesn't exist, no-op
+
+  const result = regenerateSectionLocal(lyrics, label, params);
+
+  if (!result || !result.trim()) return lyrics; // empty output → keep original
+
+  // If the header disappeared from the output, the engine returned garbage
+  if (!headerRe.test(result)) {
+    // Re-splice: find the original block and substitute just the body
+    const origLines = lyrics.split('\n');
+    const headerIdx = origLines.findIndex(l => l.trim() === `[${label}]`);
+    if (headerIdx < 0) return lyrics;
+    const newLines = result.split('\n').filter(l => l.trim() !== `[${label}]`);
+    const before = origLines.slice(0, headerIdx + 1);
+    const afterHeaderOrig = origLines.slice(headerIdx + 1);
+    const nextHeaderIdx = afterHeaderOrig.findIndex(l => /^\[[^\]]+\]$/.test(l.trim()));
+    const after = nextHeaderIdx >= 0 ? afterHeaderOrig.slice(nextHeaderIdx) : [];
+    return [...before, ...newLines, ...after].join('\n');
+  }
+
+  return result;
+}
+
+// ── Lyric snapshot type ──────────────────────────────────────────────────────
+interface LyricSnapshot {
+  text: string;
+  label: string;
+  ts: number; // Date.now()
+}
+
 // ── Syllable colour helper ───────────────────────────────────────────────────
 function syllableColour(count: number): string {
   if (count === 0) return 'text-ink-700';
@@ -582,7 +630,7 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     const { start, end } = selectedRange;
     if (start === end) { showToast('Highlight a line to rephrase'); return; }
     const selectedText = state.lyrics.slice(start, end);
-    const toneOverride: Tone = mode === 'aggressive' ? 'defiant' : 'romantic';
+    const toneOverride: Tone = mode === 'aggressive' ? 'aggressive' : 'poetic';
     const replacement = regenerateSelectionLocal(selectedText, {
       theme: theme.trim() || 'a song',
       scheme: effectiveScheme,
@@ -1229,51 +1277,103 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         </div>
       )}
 
-      {/* Quick-insert toolbar */}
-      <div className="glass-soft rounded-lg p-2 mb-3">
-        <div className="flex items-center gap-1.5 mb-1.5 px-1">
-          <Plus className="w-3 h-3 text-ink-400" />
-          <span className="text-[10px] uppercase tracking-widest text-ink-400">Quick-insert tags</span>
+      {/* ── Scrollable Suno Metatag Shelf ───────────────────────────────────── */}
+      <div className="mb-3">
+        <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+          <Hash className="w-3 h-3 text-ink-400" />
+          <span className="text-[10px] uppercase tracking-widest text-ink-400">Metatag shelf — click to insert at cursor</span>
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {QUICK_INSERT_TAGS.map(tag => (
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-ink-700 scrollbar-track-transparent">
+          {METATAG_SHELF.map(({ label, tag, color }) => (
             <button
               key={tag}
               type="button"
               onClick={() => insertAtCursor(tag)}
-              className="tag !font-mono !text-[11px] !py-1 hover:tag-active"
+              className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium border border-ink-700/60 bg-ink-850/60 hover:bg-ink-700/50 transition whitespace-nowrap ${color}`}
+              title={`Insert ${tag}`}
             >
-              {tag}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5 mt-2 mb-1.5 px-1">
-          <Type className="w-3 h-3 text-ink-400" />
-          <span className="text-[10px] uppercase tracking-widest text-ink-400">Performance cues</span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {INLINE_CUES.map(cue => (
-            <button
-              key={cue}
-              type="button"
-              onClick={() => insertAtCursor(cue)}
-              className="tag !font-mono !text-[11px] !py-1 hover:tag-magenta"
-            >
-              {cue}
+              {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Editor with syllable gutter + live preview */}
-      <div className="grid lg:grid-cols-[1fr_300px] gap-3">
-        {/* Editor + syllable gutter */}
+      {/* ── Rhyme & Rephrase action bar (shows when text is highlighted) ──── */}
+      {selectedRange.start !== selectedRange.end && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg bg-neon-magenta/5 border border-neon-magenta/30 animate-slideIn">
+          <span className="text-[10px] text-neon-magenta font-semibold uppercase tracking-wider shrink-0">
+            ✏️ Selection tools:
+          </span>
+          <button
+            type="button"
+            onClick={handleFindRhymes}
+            className="px-2 py-1 rounded text-[11px] font-medium bg-neon-cyan/10 border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/20 transition"
+          >
+            🎵 Find Rhymes
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRephraseSelection('aggressive')}
+            className="px-2 py-1 rounded text-[11px] font-medium bg-neon-rose/10 border border-neon-rose/40 text-neon-rose hover:bg-neon-rose/20 transition"
+          >
+            ⚡ More Aggressive
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRephraseSelection('poetic')}
+            className="px-2 py-1 rounded text-[11px] font-medium bg-neon-blue/10 border border-neon-blue/40 text-neon-blue hover:bg-neon-blue/20 transition"
+          >
+            🌸 More Poetic
+          </button>
+          {rhymeSuggestions.length > 0 && (
+            <div className="w-full flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-neon-magenta/20 mt-0.5">
+              <span className="text-[10px] text-ink-400 shrink-0">
+                Rhymes for <span className="text-neon-cyan font-semibold">"{rhymeWord}"</span>:
+              </span>
+              {rhymeSuggestions.map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    // Replace the last word of the selection with this rhyme
+                    const { start, end } = selectedRange;
+                    const sel = state.lyrics.slice(start, end);
+                    const words = sel.trimEnd().split(/\s+/);
+                    words[words.length - 1] = r;
+                    const replacement = words.join(' ');
+                    update('lyrics', `${state.lyrics.slice(0, start)}${replacement}${state.lyrics.slice(end)}`);
+                    setRhymeSuggestions([]);
+                    showToast(`Substituted "${r}"`);
+                  }}
+                  className="px-2 py-0.5 rounded text-[11px] font-mono bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan hover:bg-neon-cyan/25 transition"
+                >
+                  {r}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setRhymeSuggestions([])}
+                className="ml-auto text-[10px] text-ink-500 hover:text-ink-300 transition"
+              >
+                ✕ dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Editor (textarea + syllable gutter) + Section Editor panel ────── */}
+      <div className="grid lg:grid-cols-[1fr_320px] gap-3">
+        {/* Left: syllable-gutter + textarea */}
         <div className="flex rounded-lg bg-ink-950/70 border border-ink-700/60 overflow-hidden">
-          {/* Syllable gutter */}
-          <div className="flex-shrink-0 w-12 bg-ink-950/80 border-r border-ink-700/40 py-3 overflow-hidden select-none">
+          {/* Left gutter: syllable counts, colour-coded */}
+          <div className="flex-shrink-0 w-14 bg-ink-950/80 border-r border-ink-700/40 py-3 overflow-hidden select-none">
             {syllableLines.map((sl, i) => (
-              <div key={i} className="numeric text-[10px] text-right pr-2 leading-[1.6] h-[1.6em] text-ink-500">
-                {sl.count > 0 ? sl.count : ''}
+              <div
+                key={i}
+                className={`text-[9px] text-right pr-1.5 leading-[1.6] h-[1.6em] font-mono ${syllableColour(sl.count)}`}
+              >
+                {sl.count > 0 ? `${sl.count}s` : ''}
               </div>
             ))}
           </div>
@@ -1281,10 +1381,20 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
           <textarea
             ref={taRef}
             value={state.lyrics}
-            onChange={e => update('lyrics', e.target.value)}
-            onSelect={e => { setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value); setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }); }}
-            onClick={e => { setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value); setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }); }}
-            onKeyUp={e => { setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value); setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd }); }}
+            onChange={e => { update('lyrics', e.target.value); setRhymeSuggestions([]); }}
+            onSelect={e => {
+              setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value);
+              setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd });
+              if (e.currentTarget.selectionStart === e.currentTarget.selectionEnd) setRhymeSuggestions([]);
+            }}
+            onClick={e => {
+              setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value);
+              setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd });
+            }}
+            onKeyUp={e => {
+              setLyricsCursor(e.currentTarget.selectionStart, e.currentTarget.value);
+              setSelectedRange({ start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd });
+            }}
             spellCheck={false}
             className="lyrics-textarea flex-1 bg-transparent border-0 p-3 text-sm text-ink-100 focus:outline-none resize-none min-h-[320px] leading-[1.6]"
             placeholder="Generated lyrics will appear here. Click 'Generate' or write your own."
@@ -1292,14 +1402,86 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
           />
         </div>
 
-        {/* Live highlighted preview */}
-        <div className="rounded-lg bg-ink-950/40 border border-ink-700/40 p-3 max-h-[420px] overflow-auto">
-          <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest text-ink-400">
-            <FileMusic className="w-3 h-3" />
-            Live Preview
+        {/* Right: Section Editor with inline Reroll + ▲▼ */}
+        <div className="rounded-lg bg-ink-950/40 border border-ink-700/40 flex flex-col max-h-[520px]">
+          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-ink-700/40 shrink-0">
+            <FileMusic className="w-3 h-3 text-ink-400" />
+            <span className="text-[10px] uppercase tracking-widest text-ink-400 flex-1">Section Editor</span>
+            <span className="text-[9px] text-ink-600">🎲 reroll · ▲▼ reorder</span>
           </div>
-          <div className="lyrics-view text-sm text-ink-200">
-            {state.lyrics.trim() ? renderHighlighted(state.lyrics) : <span className="text-ink-500 italic">Preview appears here…</span>}
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {(() => {
+              const sections = parseSections(state.lyrics);
+              if (!sections.length) {
+                return (
+                  <div className="text-center py-6">
+                    <p className="text-[11px] text-ink-500 italic">
+                      Generate or write lyrics with bracket sections<br />
+                      <span className="text-[10px] text-ink-600">e.g. [Verse 1], [Chorus], [Bridge]</span>
+                    </p>
+                    <div className="mt-2 text-ink-200 lyrics-view text-[11px] text-left px-2 max-h-48 overflow-auto">
+                      {state.lyrics.trim() ? renderHighlighted(state.lyrics) : null}
+                    </div>
+                  </div>
+                );
+              }
+              return sections.map((sec, idx) => {
+                const sectionText = state.lyrics.slice(sec.start, sec.end).trim();
+                const lineCount = sectionText.split('\n').filter(l => !l.startsWith('[')).length;
+                const isRerolling = inlineSectionRerolling === sec.label;
+                return (
+                  <div
+                    key={`${sec.label}-${idx}`}
+                    className="rounded-lg border border-ink-700/50 bg-ink-900/50 overflow-hidden"
+                  >
+                    {/* Section header bar */}
+                    <div className="flex items-center gap-1 px-2 py-1.5 bg-ink-800/50 border-b border-ink-700/40">
+                      <span className="text-[11px] font-bold text-neon-cyan flex-1 truncate">
+                        [{sec.label}]
+                      </span>
+                      <span className="text-[9px] text-ink-500">{lineCount} lines</span>
+                      {/* ▲ move up */}
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => handleMoveSectionInLyrics(sec.label, 'up')}
+                        className="p-0.5 rounded text-ink-500 hover:text-ink-200 disabled:opacity-25 transition"
+                        title={`Move [${sec.label}] up`}
+                      >
+                        <ArrowUp className="w-3 h-3" />
+                      </button>
+                      {/* ▼ move down */}
+                      <button
+                        type="button"
+                        disabled={idx === sections.length - 1}
+                        onClick={() => handleMoveSectionInLyrics(sec.label, 'down')}
+                        className="p-0.5 rounded text-ink-500 hover:text-ink-200 disabled:opacity-25 transition"
+                        title={`Move [${sec.label}] down`}
+                      >
+                        <ArrowDown className="w-3 h-3" />
+                      </button>
+                      {/* 🎲 reroll */}
+                      <button
+                        type="button"
+                        disabled={isRerolling}
+                        onClick={() => handleInlineSectionReroll(sec.label)}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/20 disabled:opacity-40 transition shrink-0"
+                        title={`Reroll [${sec.label}]`}
+                      >
+                        {isRerolling ? '…' : '🎲'}
+                      </button>
+                    </div>
+                    {/* Section body preview */}
+                    <div className="px-2 py-1.5 text-[11px] text-ink-300 leading-relaxed max-h-28 overflow-hidden">
+                      {sectionText.split('\n').filter(l => !l.startsWith('[')).slice(0, 5).map((line, li) => (
+                        <div key={li} className="truncate">{line || '\u00a0'}</div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       </div>
@@ -1309,6 +1491,9 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         <span className="inline-flex items-center gap-1"><Gauge className="w-3 h-3" /> {lineCount} lines</span>
         <span className="inline-flex items-center gap-1"><Type className="w-3 h-3" /> {totalSyllables} syllables</span>
         <span className="inline-flex items-center gap-1"><FileMusic className="w-3 h-3" /> {regenSections.length} sections</span>
+        <span className="inline-flex items-center gap-1 ml-auto text-[9px] text-ink-600">
+          Gutter colours: <span className="text-neon-cyan/60">≤6s</span> <span className="text-neon-lime/70">7-10s</span> <span className="text-neon-amber/70">11-13s</span> <span className="text-neon-rose/70">14+s</span>
+        </span>
       </div>
     </SectionCard>
   );
