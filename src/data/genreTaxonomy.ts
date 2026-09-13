@@ -138,6 +138,20 @@ export function getAllTaxonomySubgenres(): string[] {
   );
 }
 
+// ─── Anti-cliché pairs — these two labels will never be selected together ─────────────
+// Expand this set whenever a pairing feels predictable.
+const AVOID_TOGETHER: [string, string][] = [
+  ['Trap', 'Phonk'],
+  ['Phonk', 'Trap'],
+];
+
+function hasClichéPairing(selection: string[]): boolean {
+  for (const [a, b] of AVOID_TOGETHER) {
+    if (selection.includes(a) && selection.includes(b)) return true;
+  }
+  return false;
+}
+
 // ─── Roll interface ──────────────────────────────────────────────────────────────────────
 
 export type GenreFusionRoll = {
@@ -148,11 +162,13 @@ export type GenreFusionRoll = {
 };
 
 /**
- * One-click intelligent fusion roll:
+ * One-click intelligent fusion roll — truly random on every call:
  * • 60% → 1 primary genre,  40% → 2-genre hybrid.
  * • Subgenre pool = full taxonomy pool for all selected genres, merged & deduped.
- * • 25% 0 accents · 45% 1 accent · 30% 2 accents — chosen by independent Fisher-Yates
- *   shuffle each time, so Trap will NOT always pair with Phonk.
+ * • 25% → 0 accents · 45% → 1 accent · 30% → 2 accents.
+ * • Uses unbiased Fisher-Yates shuffle (NOT sort-with-random-comparator, which
+ *   has a TimSort bias that keeps early elements near the front).
+ * • Retries up to 4 times if the selection lands on a cliché pairing (e.g. Trap+Phonk).
  */
 export function rollIntelligentGenreFusion(): GenreFusionRoll {
   const MAX_GENRES = 2;
@@ -160,12 +176,19 @@ export function rollIntelligentGenreFusion(): GenreFusionRoll {
   const picked = pickN(GENRES, genreCount);
   const genres = picked.map((g) => g.id);
 
-  // Build a combined, deduped pool from all picked genres.
-  const pool = Array.from(new Set(genres.flatMap((id) => getFusionSubgenrePool(id))));
+  // Build a combined, deduped pool — Fisher-Yates shuffled so the slice is unbiased.
+  const rawPool = Array.from(new Set(genres.flatMap((id) => getFusionSubgenrePool(id))));
 
   const accentCount = rollAccentCount();
-  // Fisher-Yates sort into a new array — no hardcoded companions.
-  const subgenres = [...pool].sort(() => 0.5 - Math.random()).slice(0, accentCount);
+  if (accentCount === 0) return { genres, subgenres: [] };
+
+  // Re-roll the slice up to 4 times to avoid cliché pairings.
+  let subgenres: string[] = [];
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const shuffled = fisherYates([...rawPool]); // fresh unbiased shuffle each attempt
+    subgenres = shuffled.slice(0, accentCount);
+    if (!hasClichéPairing(subgenres)) break;
+  }
 
   return { genres, subgenres };
 }
