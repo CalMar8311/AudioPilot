@@ -1,13 +1,16 @@
 // AI Lyric Generator workspace — controls, enhanced editor, syllable gutter, regenerate
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileMusic, Sparkles, Copy, RefreshCw, Wand2, Plus, Type, Gauge, ChevronDown, Users } from 'lucide-react';
+import { FileMusic, Sparkles, Copy, RefreshCw, Wand2, Plus, Type, Gauge, ChevronDown, Users, Dices, BookOpen, Zap as ZapIcon } from 'lucide-react';
 import {
   STRUCTURE_TEMPLATES, TONE_OPTIONS, LANG_OPTIONS, RHYME_OPTIONS,
   RHYME_SCHEME_IDS, REGIONAL_FLOWS, DELIVERY_DIRECTIVES,
   randomThemeForGenre, NARRATIVE_THEMES, type NarrativeTheme,
   type RhymeScheme, type Tone, type Lang, type StructureId, type StructureTemplate,
 } from '@/data/lyricBanks';
+import {
+  generateStoryPrompt, VIBE_OPTIONS, type VibeFocus, type GeneratedNarrative,
+} from '@/utils/narrativeEngine';
 import { structureIdForGenres, GENRE_BLUEPRINTS } from '@/data/catalogs';
 import { fusedLyricContext, resolveArchetypes } from '@/engine/styleFusion';
 import { SectionCard, DiceButton } from '@/components/ui';
@@ -105,6 +108,45 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   const [deliveryDirectives, setDeliveryDirectives] = useState<string[]>([]);
   const [selectedRange, setSelectedRange] = useState({ start: 0, end: 0 });
   const [selectedNarrativeId, setSelectedNarrativeId] = useState<string>('');
+
+  // ── Dynamic Narrative Matrix ─────────────────────────────────────────────
+  const [vibeFilter, setVibeFilter] = useState<VibeFocus | null>(null);
+  const [generatedNarrative, setGeneratedNarrative] = useState<GeneratedNarrative | null>(null);
+  const [narrativeRollCount, setNarrativeRollCount] = useState(0);
+
+  const handleRollNarrative = () => {
+    const freshNarrative = generateStoryPrompt(
+      state.genres,
+      vibeFilter,
+      Date.now() + narrativeRollCount,
+    );
+    setGeneratedNarrative(freshNarrative);
+    setNarrativeRollCount(c => c + 1);
+  };
+
+  const applyNarrativeToTheme = (narrative: GeneratedNarrative) => {
+    setTheme(`${narrative.titleIdea} — ${narrative.storyBrief}`);
+    showToast(`Story applied: "${narrative.titleIdea}"`);
+  };
+
+  const injectNarrativeHooks = (narrative: GeneratedNarrative) => {
+    const seedText = [
+      `[Verse 1]`,
+      narrative.lyricSeedHooks[0],
+      '',
+      '[Chorus]',
+      narrative.lyricSeedHooks[1],
+    ].join('\n');
+    update('lyrics', state.lyrics ? state.lyrics + '\n\n' + seedText : seedText);
+    addRecentPrompt(seedText);
+    showToast('Seed hooks injected into Lyric Canvas');
+  };
+
+  const injectNarrativeMetatag = (tag: string) => {
+    eng.insertLyricTag(tag);
+    showToast('Metatag inserted at cursor');
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   const selectedNarrative = useMemo(
     () => NARRATIVE_THEMES.find(nt => nt.id === selectedNarrativeId) || null,
