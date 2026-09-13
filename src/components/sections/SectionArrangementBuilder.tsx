@@ -164,59 +164,75 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
               <div
                 key={section.id}
                 draggable
-                onDragStart={() => setDraggedIndex(index)}
-                onDragOver={event => {
-                  event.preventDefault();
+                onDragStart={(e) => {
+                  setDraggedIndex(index);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', String(index));
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
                   setDragOverIndex(index);
                 }}
                 onDragLeave={() => setDragOverIndex(current => current === index ? null : current)}
-                onDrop={event => {
-                  event.preventDefault();
+                onDrop={(e) => {
+                  e.preventDefault();
                   handleDrop(index);
                 }}
                 onDragEnd={() => {
+                  // Always reset — prevents fist cursor getting stuck if dropped outside a target
                   setDraggedIndex(null);
                   setDragOverIndex(null);
                 }}
-                className={`glass-soft rounded-lg p-3 border transition-all cursor-grab active:cursor-grabbing ${
-                  dragOverIndex === index ? 'border-neon-cyan bg-neon-cyan/10 translate-y-0.5' :
-                  draggedIndex === index ? 'opacity-50' :
-                  selectedSection === index 
-                    ? 'border-neon-cyan/60 bg-neon-cyan/5' 
-                    : 'border-ink-700/50 hover:border-ink-600'
+                className={`glass-soft rounded-lg p-3 border transition-all select-none ${
+                  draggedIndex === index
+                    ? 'cursor-grabbing opacity-50 border-neon-cyan/30'
+                    : dragOverIndex === index
+                    ? 'cursor-grab border-neon-cyan bg-neon-cyan/10 translate-y-0.5'
+                    : selectedSection === index
+                    ? 'cursor-grab border-neon-cyan/60 bg-neon-cyan/5'
+                    : 'cursor-grab border-ink-700/50 hover:border-ink-600'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  {/* Drag handle */}
-                  <div className="flex items-center gap-1">
+                  {/* Drag handle + up/down nudge buttons */}
+                  <div className="flex items-center gap-1" draggable={false} onDragStart={(e) => e.stopPropagation()}>
                     <button
                       type="button"
-                      onClick={() => moveSection(index, Math.max(0, index - 1))}
+                      draggable={false}
+                      onDragStart={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); moveSection(index, Math.max(0, index - 1)); }}
                       disabled={index === 0}
-                      className="p-1 text-ink-400 hover:text-ink-200 disabled:opacity-30"
+                      className="p-1 text-ink-400 hover:text-ink-200 disabled:opacity-30 cursor-pointer"
+                      title="Move up"
                     >
-                      ↑
+                      ▲
                     </button>
-                    <GripVertical className="w-4 h-4 text-ink-500" title="Drag to reorder" />
+                    <GripVertical className="w-4 h-4 text-ink-500 pointer-events-none" title="Drag to reorder" />
                     <button
                       type="button"
-                      onClick={() => moveSection(index, Math.min(arrangedSections.length - 1, index + 1))}
+                      draggable={false}
+                      onDragStart={(e) => e.stopPropagation()}
+                      onClick={(e) => { e.stopPropagation(); moveSection(index, Math.min(arrangedSections.length - 1, index + 1)); }}
                       disabled={index === arrangedSections.length - 1}
-                      className="p-1 text-ink-400 hover:text-ink-200 disabled:opacity-30"
+                      className="p-1 text-ink-400 hover:text-ink-200 disabled:opacity-30 cursor-pointer"
+                      title="Move down"
                     >
-                      ↓
+                      ▼
                     </button>
                   </div>
 
                   {/* Section label */}
-                  <div className="flex-1">
+                  <div className="flex-1" draggable={false} onDragStart={(e) => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-ink-100">[{section.label}]</span>
+                      <span className="text-sm font-medium text-ink-100 pointer-events-none">[{section.label}]</span>
                       <button
                         type="button"
-                        onClick={() => setSelectedSection(selectedSection === index ? null : index)}
-                        className="text-[10px] text-ink-400 hover:text-neon-cyan transition"
-                     >
+                        draggable={false}
+                        onDragStart={(e) => e.stopPropagation()}
+                        onClick={(e) => { e.stopPropagation(); setSelectedSection(selectedSection === index ? null : index); }}
+                        className="text-[10px] text-ink-400 hover:text-neon-cyan transition cursor-pointer"
+                      >
                         {selectedSection === index ? 'Close' : 'Edit Energy'}
                       </button>
                     </div>
@@ -228,9 +244,11 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                           <button
                             key={energy.id}
                             type="button"
-                            onClick={() => updateSectionEnergy(index, energy.label)}
+                            draggable={false}
+                            onDragStart={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); updateSectionEnergy(index, energy.label); }}
                             className={
-                              'px-2 py-1 rounded text-[10px] font-medium border transition-all ' +
+                              'px-2 py-1 rounded text-[10px] font-medium border transition-all cursor-pointer ' +
                               (section.energy === energy.label
                                 ? `bg-neon-cyan/15 border-neon-cyan/60 ${energy.color}`
                                 : 'bg-ink-850/60 border-ink-700/60 text-ink-300 hover:border-neon-cyan/40')
@@ -244,7 +262,7 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                   </div>
 
                   {/* Current energy display */}
-                  <div className="text-right">
+                  <div className="text-right pointer-events-none">
                     <div className="flex items-center gap-1">
                       <Zap className="w-3 h-3 text-neon-amber" />
                       <span className="text-[10px] text-ink-300">{section.energy}</span>
@@ -254,8 +272,11 @@ export function SectionArrangementBuilder({ eng }: { eng: PromptEngine }) {
                   {/* Remove button */}
                   <button
                     type="button"
-                    onClick={() => removeSection(index)}
-                    className="p-1.5 text-ink-400 hover:text-neon-rose transition"
+                    draggable={false}
+                    onDragStart={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); removeSection(index); }}
+                    className="p-1.5 text-ink-400 hover:text-neon-rose transition cursor-pointer"
+                    title="Remove section"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
