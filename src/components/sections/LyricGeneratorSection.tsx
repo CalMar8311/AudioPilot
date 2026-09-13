@@ -76,7 +76,6 @@ function applyDuetVocalTags(lyrics: string, archetypes: string[]): string {
 function renderHighlighted(text: string) {
   return text.split(/(\[[^\]]+\])/g).map((part, i) => {
     if (/^\[[^\]]+\]$/.test(part)) {
-      // Distinguish section headers (single word, capitalized) from inline cues
       const isCue = part.includes(' ') || /Drop|Tempo|Ad-Lib|Harmonies|Vocoder|Chant|Energy|Power|Stripped|Fading|Atmospheric|Tension|Snare|Shift|Flow|Pulse/.test(part.slice(1, -1));
       return (
         <span key={i} className={isCue ? 'text-neon-magenta font-semibold' : 'mt'}>
@@ -87,6 +86,95 @@ function renderHighlighted(text: string) {
     return <span key={i}>{part}</span>;
   });
 }
+
+// ── Rhyme finder ────────────────────────────────────────────────────────────
+// Checks whether two words share a similar ending sound (last 2-3 chars).
+function endSoundsMatch(a: string, b: string): boolean {
+  if (a === b) return false;
+  const tail = (s: string, n: number) => s.slice(-n);
+  return tail(a, 3) === tail(b, 3) || tail(a, 2) === tail(b, 2);
+}
+
+/** Return up to 8 musically-compatible rhyme suggestions for a given word. */
+function findRhymesForWord(word: string): string[] {
+  const clean = word.toLowerCase().replace(/[^a-z]/g, '');
+  if (!clean) return [];
+  const hits = new Set<string>();
+  for (const words of Object.values(RHYME_FAMILIES)) {
+    // Direct family match
+    if (words.some(w => w === clean || endSoundsMatch(clean, w))) {
+      words.filter(w => w !== clean).forEach(w => hits.add(w));
+    }
+    if (hits.size >= 12) break;
+  }
+  // Deduplicate and return the best 8
+  return Array.from(hits).filter(w => w !== clean).slice(0, 8);
+}
+
+// ── Section block splitter (for reorder / inline reroll) ────────────────────
+interface LyricBlock { label: string | null; text: string }
+
+function splitIntoBlocks(lyrics: string): LyricBlock[] {
+  const lines = lyrics.split('\n');
+  const blocks: LyricBlock[] = [];
+  let current: LyricBlock = { label: null, text: '' };
+  for (const line of lines) {
+    const m = line.match(/^\[([^\]]+)\]$/);
+    const isHeader = m && !line.includes(' ') === false && m[1].trim().length > 0;
+    if (isHeader) {
+      if (current.label !== null || current.text.trim()) blocks.push(current);
+      current = { label: m![1], text: line };
+    } else {
+      current = { ...current, text: current.text ? current.text + '\n' + line : line };
+    }
+  }
+  if (current.label !== null || current.text.trim()) blocks.push(current);
+  return blocks;
+}
+
+function reorderSectionInLyrics(lyrics: string, label: string, direction: 'up' | 'down'): string {
+  const blocks = splitIntoBlocks(lyrics);
+  const idx = blocks.findIndex(b => b.label === label);
+  if (idx < 0) return lyrics;
+  const target = direction === 'up' ? idx - 1 : idx + 1;
+  if (target < 0 || target >= blocks.length) return lyrics;
+  const next = [...blocks];
+  [next[idx], next[target]] = [next[target], next[idx]];
+  return next.map(b => b.text).join('\n');
+}
+
+// ── Syllable colour helper ───────────────────────────────────────────────────
+function syllableColour(count: number): string {
+  if (count === 0) return 'text-ink-700';
+  if (count <= 6)  return 'text-neon-cyan/60';
+  if (count <= 10) return 'text-neon-lime/70';
+  if (count <= 13) return 'text-neon-amber/70';
+  return 'text-neon-rose/70';
+}
+
+// Expanded quick-inject metatags (for the scrollable shelf)
+const METATAG_SHELF: { label: string; tag: string; color: string }[] = [
+  { label: '[Harmonies]',         tag: '[Harmonies]',         color: 'text-neon-cyan'    },
+  { label: '[Ad-lib]',            tag: '[Ad-lib]',            color: 'text-neon-magenta' },
+  { label: '[Whisper]',           tag: '[Whispered]',         color: 'text-ink-300'      },
+  { label: '[Falsetto]',          tag: '[Falsetto]',          color: 'text-neon-blue'    },
+  { label: '[Belt]',              tag: '[Belting]',           color: 'text-neon-rose'    },
+  { label: '[Inst. Break]',       tag: '[Instrumental Break]',color: 'text-neon-lime'    },
+  { label: '[Beat Drop]',         tag: '[Bass Drop]',         color: 'text-neon-amber'   },
+  { label: '[Guitar Solo]',       tag: '[Guitar Solo]',       color: 'text-neon-lime'    },
+  { label: '[Verse]',             tag: '[Verse]',             color: 'text-ink-300'      },
+  { label: '[Chorus]',            tag: '[Chorus]',            color: 'text-ink-300'      },
+  { label: '[Pre-Chorus]',        tag: '[Pre-Chorus]',        color: 'text-ink-300'      },
+  { label: '[Bridge]',            tag: '[Bridge]',            color: 'text-ink-300'      },
+  { label: '[Drop]',              tag: '[Drop]',              color: 'text-neon-amber'   },
+  { label: '[Build-up]',          tag: '[Build-up]',          color: 'text-neon-amber'   },
+  { label: '[Breakdown]',         tag: '[Breakdown]',         color: 'text-ink-300'      },
+  { label: '[Outro]',             tag: '[Outro]',             color: 'text-ink-300'      },
+  { label: '[Vocoder]',           tag: '[Vocoder]',           color: 'text-neon-blue'    },
+  { label: '[Crowd Chant]',       tag: '[Crowd Chant]',       color: 'text-neon-rose'    },
+  { label: '[Half-Time]',         tag: '[Half-Time]',         color: 'text-neon-cyan'    },
+  { label: '[Faster Tempo]',      tag: '[Faster Tempo]',      color: 'text-neon-amber'   },
+];
 
 export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   const {
@@ -116,6 +204,14 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
   const [deliveryDirectives, setDeliveryDirectives] = useState<string[]>([]);
   const [selectedRange, setSelectedRange] = useState({ start: 0, end: 0 });
   const [selectedNarrativeId, setSelectedNarrativeId] = useState<string>('');
+
+  // ── Inline lyric toolkit state ───────────────────────────────────────────
+  // Section-level reroll
+  const [inlineSectionRerolling, setInlineSectionRerolling] = useState<string | null>(null);
+  // Rhyme & rephrase popover
+  const [rhymeSuggestions, setRhymeSuggestions] = useState<string[]>([]);
+  const [rhymeWord, setRhymeWord] = useState('');
+  // ────────────────────────────────────────────────────────────────────────
 
   // ── Dynamic Narrative Matrix ─────────────────────────────────────────────
   const [vibeFilter, setVibeFilter] = useState<VibeFocus | null>(null);
