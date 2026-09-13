@@ -527,6 +527,90 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     showToast('Highlighted lyric regenerated');
   };
 
+  // ── Inline section reroll ───────────────────────────────────────────────
+  const handleInlineSectionReroll = (label: string) => {
+    setInlineSectionRerolling(label);
+    const next = regenerateSectionLocal(state.lyrics, label, {
+      theme: theme.trim() || 'a reflective, emotionally resonant song',
+      scheme: effectiveScheme,
+      tone: effectiveTone,
+      lang,
+      structure,
+      studioContext: {
+        genres: state.genres,
+        instruments: state.instruments,
+        vocalTypes: state.vocalTypes,
+        moods: state.moods,
+        bpm: state.bpm,
+        blend: state.blend,
+        artistArchetypes: state.artistArchetypes,
+        artistBlend: state.artistBlend,
+      },
+      vocalArchetypes: state.artistArchetypes,
+      regionalFlows,
+      deliveryDirectives,
+      fusedStyle: fusion,
+    });
+    update('lyrics', next);
+    addRecentPrompt(next);
+    showToast(`🎲 Rerolled [${label}]`);
+    setInlineSectionRerolling(null);
+  };
+
+  const handleMoveSectionInLyrics = (label: string, direction: 'up' | 'down') => {
+    const next = reorderSectionInLyrics(state.lyrics, label, direction);
+    if (next !== state.lyrics) {
+      update('lyrics', next);
+      showToast(`Moved [${label}] ${direction}`);
+    }
+  };
+
+  // ── Rhyme & rephrase popover ─────────────────────────────────────────────
+  const handleFindRhymes = () => {
+    const { start, end } = selectedRange;
+    if (start === end) { showToast('Highlight a word or line first'); return; }
+    const selectedText = state.lyrics.slice(start, end).trim();
+    // Get the last word of the selected text
+    const lastWord = selectedText.split(/\s+/).pop() ?? selectedText;
+    const rhymes = findRhymesForWord(lastWord);
+    setRhymeWord(lastWord);
+    setRhymeSuggestions(rhymes.length ? rhymes : ['No rhymes found — try a different word']);
+    showToast(`Found ${rhymes.length} rhymes for "${lastWord}"`);
+  };
+
+  const handleRephraseSelection = (mode: 'aggressive' | 'poetic') => {
+    const { start, end } = selectedRange;
+    if (start === end) { showToast('Highlight a line to rephrase'); return; }
+    const selectedText = state.lyrics.slice(start, end);
+    const toneOverride: Tone = mode === 'aggressive' ? 'defiant' : 'romantic';
+    const replacement = regenerateSelectionLocal(selectedText, {
+      theme: theme.trim() || 'a song',
+      scheme: effectiveScheme,
+      tone: toneOverride,
+      lang,
+      structure,
+      studioContext: {
+        genres: state.genres,
+        instruments: state.instruments,
+        vocalTypes: state.vocalTypes,
+        moods: state.moods,
+        bpm: state.bpm,
+        blend: state.blend,
+        artistArchetypes: state.artistArchetypes,
+        artistBlend: state.artistBlend,
+      },
+      vocalArchetypes: state.artistArchetypes,
+      regionalFlows,
+      deliveryDirectives,
+      fusedStyle: fusion,
+    });
+    update('lyrics', `${state.lyrics.slice(0, start)}${replacement}${state.lyrics.slice(end)}`);
+    setSelectedRange({ start: start + replacement.length, end: start + replacement.length });
+    setRhymeSuggestions([]);
+    showToast(`Rephrased — ${mode}`);
+  };
+  // ────────────────────────────────────────────────────────────────────────
+
   const insertAtCursor = (tag: string) => {
     const ta = taRef.current;
     if (!ta) {
