@@ -16,6 +16,8 @@ interface WaveformCanvasProps {
   /** Dims the waveform to indicate a muted / non-soloed track. */
   dimmed?: boolean;
   onSeek?: (sec: number) => void;
+  /** Fires once per decoded file with the actual buffer duration (seconds). */
+  onDuration?: (durationSec: number) => void;
 }
 
 const BUCKET_COUNT = 300;
@@ -28,6 +30,7 @@ export function WaveformCanvas({
   heightPx = 56,
   dimmed = false,
   onSeek,
+  onDuration,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,6 +57,7 @@ export function WaveformCanvas({
           await ctx.close();
         }
         if (cancelled) return;
+        onDuration?.(buffer.duration);
 
         const channel = buffer.getChannelData(0);
         const bucketSize = Math.max(1, Math.floor(channel.length / BUCKET_COUNT));
