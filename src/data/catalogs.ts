@@ -27,6 +27,7 @@ export const GENRES: GenreDef[] = [
   { id: 'country', label: 'Country / Americana', color: 'amber', subgenres: ['Americana', 'Country Folk', 'Alt-Country', 'Roots Rock'] },
   { id: 'blues', label: 'Blues', color: 'blue', subgenres: ['Chicago Blues', 'Delta Blues', 'Electric Blues', 'Blues Rock'] },
   { id: 'yacht-rock', label: 'Late 70s West Coast AOR, Soft Rock, Smooth Melodic Rock', color: 'blue', subgenres: ['Yacht Rock', 'West Coast AOR', 'Soft Rock'] },
+  { id: 'gospel-trap', label: 'Gospel Trap / Soul Sample', color: 'amber', subgenres: ['Chopped Soul', 'Church Organ', 'Gospel Choir', 'Pitched Chops', 'Distorted 808'] },
 ];
 
 export const INSTRUMENTS: Tag[] = [
@@ -387,6 +388,24 @@ export function rollPreset(preset: Preset): Preset {
 }
 
 // ---- Genre blueprint presets (discrete, one-per-genre) ----
+
+/**
+ * One of the randomly-selectable sub-vibes for a blueprint that supports
+ * dynamic variation (e.g. "Gospel Trap / Soul Sample").
+ * When a blueprint has `dynamicVariants`, one is picked at random each time
+ * the blueprint is applied, so the sound never repeats the exact same flavor.
+ */
+export type BlueprintVariant = {
+  /** Short human-readable name shown in the toast, e.g. "Sunday Morning Service". */
+  name: string;
+  /** Comma-separated extra sonic descriptors injected into the style prompt. */
+  styleTags: string;
+  /** Suno bracket cue injected at the top of the lyric canvas. */
+  bracketTag: string;
+  /** Vocal/cadence descriptor appended alongside styleTags. */
+  cadenceVocal: string;
+};
+
 export type GenreBlueprint = {
   id: string;
   name: string;
@@ -407,6 +426,8 @@ export type GenreBlueprint = {
   rhymeScheme: string;        // matches RhymeScheme in lyricBanks
   vocalArchetypes: string[];  // archetype ids (see lyricBanks VOCAL_ARCHETYPES)
   regionalFlows: string[];    // flow labels
+  /** Optional randomized sub-vibes — one is picked at random on every application. */
+  dynamicVariants?: BlueprintVariant[];
 };
 
 export const GENRE_BLUEPRINTS: GenreBlueprint[] = [
