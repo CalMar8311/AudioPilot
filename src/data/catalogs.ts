@@ -594,6 +594,47 @@ export const GENRE_BLUEPRINTS: GenreBlueprint[] = [
     vocalArchetypes: ['power-pop-diva'],
     regionalFlows: [],
   },
+  {
+    id: 'bp-gospel-trap',
+    name: 'Gospel Trap / Soul Sample',
+    emoji: '⛪',
+    blurb: 'Chopped soul samples, church organ, rolling 808s — sacred and street collide.',
+    primaryGenre: 'gospel-trap',
+    secondaryGenre: 'hiphop',
+    subgenres: ['Chopped Soul', 'Gospel Choir', 'Distorted 808'],
+    instruments: ['808-bass', '808-kick', 'hi-hat-rolls', 'grand-piano', 'choir', 'vinyl-crackle', 'brass-stabs'],
+    vocalTypes: ['male', 'belted'],
+    vocalEffects: ['reverb-drenched', 'dry-intimate'],
+    moods: ['uplifting', 'nostalgic', 'dark'],
+    production: ['tape-saturation', 'wide-stereo', 'hifi-studio'],
+    bpm: 140,
+    timeFeel: 'normal',
+    blend: 75,
+    structureId: 'hiphop',
+    rhymeScheme: 'AABB',
+    vocalArchetypes: ['neo-soul-badu'],
+    regionalFlows: ['Southern / Dirty South / Trap'],
+    dynamicVariants: [
+      {
+        name: 'Sunday Morning Service (Uplifting Gospel Trap)',
+        styleTags: 'triumphant gospel choir, church organ swell, energetic trap bounce, soaring male gospel tenor, clapping snare, warm brass horns, uplifting Sunday service energy',
+        bracketTag: '[Gospel Choir Intro: Call-and-response vocal run with organ pad]',
+        cadenceVocal: 'soulful gospel belting with modern melodic trap cadence',
+      },
+      {
+        name: 'Late Night Testimony (Dark / Emotional Soul Trap)',
+        styleTags: 'pitched-down vocal sample, minor key Rhodes, heavy distorted 808, moody vinyl hiss, introspective melodic rap, tape saturation, emotional church piano',
+        bracketTag: '[Chop & Screw Sample Break: Pitched soul vocal loop over dry 808]',
+        cadenceVocal: 'vulnerable baritone trap delivery, late-night confession flow',
+      },
+      {
+        name: 'Street Praise (Fast Drum Bounce / 90s Soul Chop)',
+        styleTags: 'high-pitched vocal chops, fast hi-hat rolls, boom-bap syncopated snap, Hammond B3 organ, vibrant gospel turnaround, 70s soul sample flip',
+        bracketTag: '[Choir Hook: 4-part gospel harmony with rolling sub-bass]',
+        cadenceVocal: 'punchy cadence, storytelling street flow with soulful ad-libs',
+      },
+    ],
+  },
 ];
 
 // Map a genre id to its preferred structure template id
@@ -613,6 +654,7 @@ export const GENRE_STRUCTURE_MAP: Record<string, string> = {
   'yacht-rock': 'standard-pop',
   'mid-east': 'standard-pop',
   'asian-fusion': 'ballad',
+  'gospel-trap': 'hiphop',
 };
 
 export function structureIdForGenres(genres: string[]): string {

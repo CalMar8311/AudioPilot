@@ -82,6 +82,12 @@ export const SUBGENRE_MAP: Record<string, string[]> = {
     'Yacht Rock', 'West Coast AOR', 'Soft Rock',
     'Neo-Soul', 'Boogie / Post-Disco', 'Chillwave', 'Soulful Vocals',
   ],
+  'Gospel Trap / Soul Sample': [
+    'Chopped Soul', 'Church Organ', 'Gospel Choir', 'Pitched Chops', 'Distorted 808',
+    // Crossover accents from adjacent families:
+    'Boom-Bap', 'Lo-Fi Hip-Hop', 'Neo-Soul', 'Trap', 'Soul',
+    'Tape Saturation', 'Vinyl Crackle', 'Quiet Storm',
+  ],
 };
 
 // ID-keyed alias (catalogs.ts uses GenreDef.id like 'hiphop', 'rnb', etc.)

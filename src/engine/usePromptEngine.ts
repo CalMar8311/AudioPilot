@@ -971,8 +971,22 @@ export function usePromptEngine() {
   // ---- Apply a genre blueprint to the studio state ----
   const applyBlueprint = useCallback((bp: GenreBlueprint) => {
     const preset = blueprintToPreset(bp);
+
+    // ── Dynamic variants: pick one random sub-vibe if the blueprint defines them ──────
+    // The picked variant's styleTags + cadenceVocal are injected into customInstruments
+    // (which the compiler appends verbatim to the Suno style prompt), and the bracketTag
+    // becomes the seed lyric / metatag text in the lyric canvas.
+    if (bp.dynamicVariants && bp.dynamicVariants.length > 0) {
+      const variant = bp.dynamicVariants[Math.floor(Math.random() * bp.dynamicVariants.length)];
+      const extraTags = [variant.styleTags, variant.cadenceVocal].filter(Boolean);
+      preset.customInstruments = [...preset.customInstruments, ...extraTags];
+      preset.lyricMetatags = variant.bracketTag;
+      showToast(`Loaded blueprint: ${bp.name} — ${variant.name}`);
+    } else {
+      showToast(`Loaded blueprint: ${bp.name}`);
+    }
+
     setState(applyPreset(preset));
-    showToast(`Loaded blueprint: ${bp.name}`);
   }, [showToast]);
 
   // ---- "Surprise Me" — uses the same dynamic fusion engine as the Genre dice button ----

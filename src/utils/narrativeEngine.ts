@@ -197,6 +197,21 @@ const GENRE_FRAMES: GenreFrame[] = [
     ],
   },
   {
+    matchIds: ['gospel-trap', 'gospel', 'soul-sample', 'gospel trap'],
+    label: 'Gospel Trap / Soul Sample',
+    writingStyle:
+      'Sacred and street intersecting at the crossroads of faith and struggle. Testimony delivered over rolling 808s. The choir and the crowd as one voice. Redemption earned through the grind, not given.',
+    hookStyle:
+      'Call-and-response payoffs that feel communal. Vocal runs that carry the weight of a church testimony. Hooks that build like a Sunday sermon reaching its crescendo.',
+    metatagTemplates: [
+      '[Gospel Choir Intro: Call-and-response vocal run with organ pad]',
+      '[Verse: Close mic testimony flow, 808 undercurrent]',
+      '[Chorus: Choir swell, clapping snare, soaring lead]',
+      '[Bridge: Stripped — solo voice over organ drone]',
+      '[Outro: Full choir, fading into vinyl crackle]',
+    ],
+  },
+  {
     matchIds: ['pop', 'dance', 'k-pop', 'kpop', 'bubblegum', 'synth-pop'],
     label: 'Pop / Dance',
     writingStyle:
