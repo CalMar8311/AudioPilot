@@ -8,6 +8,7 @@ import {
   STEM_OPTIONS, TIME_SEGMENT_OPTIONS, StemType, TimeSegment,
   transcribeAudioToMidi, transcribeAllStemsToMultiTrackMidi, TranscriptionResult,
   splitTranscriptionIntoInstrumentLayers, InstrumentLayerSplitResult,
+  TranscriptionTimeoutError,
 } from '@/engine/audioToMidiEngine';
 import { downloadMidiBlob, MidiNote } from '@/utils/midiEncoder';
 import { uploadMidiForDragDrop } from '@/services/midiDragDropEngine';
@@ -121,7 +122,8 @@ export function AudioMidiExtractorPanel({
     try {
       await new Promise(r => setTimeout(r, 350));
       // Runs transcription directly on the uploaded audio file/buffer — no stem-separation
-      // backend involved.
+      // backend involved. Long tracks are auto-sliced and the whole pass is raced against
+      // a 25s deadline inside transcribeAudioToMidi — see its doc comment for details.
       const res = await transcribeAudioToMidi({
         stem: selectedStem,
         timeSegment: selectedSegment,
@@ -131,10 +133,19 @@ export function AudioMidiExtractorPanel({
         key: analysis?.detectedKey || 'F# Minor',
       });
       setTranscription(res);
+      if (res.autoSliced) {
+        onShowToast(`Track exceeds 30s — auto-sliced to the first ${Math.round(res.effectiveDurationSec)}s to prevent memory exhaustion.`);
+      }
       onShowToast(`Extracted ${res.notes.length} polyphonic MIDI note events for ${res.stemLabel}!`);
-    } catch {
-      onShowToast('Error transcribing audio to MIDI');
+    } catch (err) {
+      if (err instanceof TranscriptionTimeoutError) {
+        onShowToast('⏱ Transcription timed out. Please try a shorter audio loop or lower resolution.');
+      } else {
+        onShowToast('Error transcribing audio to MIDI');
+      }
     } finally {
+      // Guaranteed to run even on timeout/abort/network failure — the UI
+      // never gets stuck on "Analyzing…" indefinitely.
       setIsTranscribing(false);
     }
   };
@@ -145,9 +156,16 @@ export function AudioMidiExtractorPanel({
       const res = await transcribeAllStemsToMultiTrackMidi(audioFile, analysis);
       const filename = `${res.projectName}_FL_Studio_MultiTrack_Bundle.mid`;
       downloadMidiBlob(res.midiData, filename);
+      if (res.autoSliced) {
+        onShowToast(`Track exceeds 30s — auto-sliced to the first ${Math.round(res.effectiveDurationSec)}s to prevent memory exhaustion.`);
+      }
       onShowToast(`Exported ${res.tracksCount} stems (${res.totalNotesCount} notes) as FL Studio Multi-Track Bundle!`);
-    } catch {
-      onShowToast('Error exporting FL Studio Multi-Track Bundle');
+    } catch (err) {
+      if (err instanceof TranscriptionTimeoutError) {
+        onShowToast('⏱ Transcription timed out. Please try a shorter audio loop or lower resolution.');
+      } else {
+        onShowToast('Error exporting FL Studio Multi-Track Bundle');
+      }
     } finally {
       setIsTranscribing(false);
     }

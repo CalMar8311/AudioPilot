@@ -624,12 +624,28 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Hard 15s deadline — if the edge function / OpenAI call hangs (dropped
+    // connection, stalled response, etc.) we abort rather than spinning
+    // forever. `timedOut` lets the catch block show a specific message
+    // instead of the generic "cancelled by a newer request" silent return.
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 15_000);
+
     // Resolve the generation parameters — use overrides where provided so we don't
     // depend on React state updates that haven't rendered yet.
     const activeStructId = overrides?.structId ?? structId ?? effectiveStructureId;
     const activeScheme   = overrides?.scheme   ?? effectiveScheme;
     const activeStructure =
       STRUCTURE_TEMPLATES.find(s => s.id === activeStructId) ?? STRUCTURE_TEMPLATES[0];
+
+    // Snapshot so we can explicitly restore on failure — belt-and-suspenders
+    // alongside the fact that `update('lyrics', …)` below only ever runs on
+    // a confirmed success, so the canvas should never show a half-written
+    // or corrupted result.
+    const previousLyrics = state.lyrics;
 
     setGenerating(true);
     setIsLyricGenerating(true);
@@ -659,7 +675,8 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         signal: controller.signal,
       });
 
-      // If another request already cancelled this one, silently discard.
+      // If another request already cancelled this one, silently discard —
+      // the newer request owns the loading state and will update lyrics itself.
       if (controller.signal.aborted) return;
 
       let processedLyrics = result.lyrics;
@@ -680,13 +697,31 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
         showToast('✨ Lyrics generated');
       }
     } catch (err) {
-      // AbortError is expected on cancel — don't show an error toast.
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      showToast('Generation failed — try again');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (timedOut) {
+          // Our own 15s deadline fired — restore defensively and surface an
+          // actionable message instead of leaving an infinite spinner.
+          update('lyrics', previousLyrics);
+          showToast('⏱ Lyric generation timed out after 15s. Please try again.');
+        }
+        // Otherwise this request was superseded by a newer one — silent, no-op.
+        return;
+      }
+      // Network drop, 429, 500, or any other API failure — restore whatever
+      // was on the canvas before this attempt so the user never loses lyrics.
+      update('lyrics', previousLyrics);
+      showToast('Generation failed — restored previous lyrics. Try again.');
     } finally {
-      if (!controller.signal.aborted) {
+      clearTimeout(timeoutId);
+      // Only reset loading state if this invocation is still the "active"
+      // one — a request superseded by a newer call must not clobber the
+      // newer request's in-flight spinner. This is also what guarantees the
+      // timeout path above always resets the spinner: nothing else replaces
+      // abortControllerRef.current when we abort ourselves on timeout.
+      if (abortControllerRef.current === controller) {
         setGenerating(false);
         setIsLyricGenerating(false);
+        abortControllerRef.current = null;
       }
     }
   };

@@ -19,6 +19,7 @@ import type { Preset } from '@/data/catalogs';
 import {
   transcribeAudioToMidi,
   splitTranscriptionIntoInstrumentLayers,
+  TranscriptionTimeoutError,
   type TranscriptionResult,
   type InstrumentLayerSplitResult,
 } from '@/engine/audioToMidiEngine';
@@ -27,6 +28,7 @@ import { countSyllables } from '@/engine/lyricEngine';
 import { LicensingModal } from '@/components/LicensingModal';
 import { Toast } from '@/components/Toast';
 import { MidiStagingRoll } from '@/components/daw/MidiStagingRoll';
+import { DawStagingVault } from '@/components/daw/DawStagingVault';
 
 // ── Structural section parser (DAW-dock-local) ───────────────────────────────
 const STRUCT_RE = /^(?:Intro|Verse\s*\d*|Chorus\s*\d*|Bridge|Pre-Chorus|Hook|Outro)/i;
@@ -71,6 +73,9 @@ function parseDawBlocks(lyrics: string): DawBlock[] {
 // ── Icon rail view types ─────────────────────────────────────────────────────
 type RailView = 'dock' | 'remix' | 'style' | 'export';
 
+// ── Column-3 tab types ───────────────────────────────────────────────────────
+type Col3Tab = 'lyrics' | 'daw-vault';
+
 // ── Main DawShell ────────────────────────────────────────────────────────────
 interface DawShellProps {
   eng: PromptEngine;
@@ -82,6 +87,7 @@ export function DawShell({ eng, onPresetSelect, onEraSelect }: DawShellProps) {
   const [railView, setRailView] = useState<RailView>('dock');
   const [assetTab, setAssetTab] = useState<'browser' | 'playlist'>('browser');
   const [col1Search, setCol1Search] = useState('');
+  const [col3Tab, setCol3Tab] = useState<Col3Tab>('lyrics');
   const [isLicensingOpen, setIsLicensingOpen] = useState(false);
 
   // ── MIDI state (Column 2) ────────────────────────────────────────────────
@@ -101,6 +107,8 @@ export function DawShell({ eng, onPresetSelect, onEraSelect }: DawShellProps) {
     if (!audioFile) { eng.showToast('Upload an audio file first'); return; }
     setIsMidiTranscribing(true);
     try {
+      // transcribeAudioToMidi auto-slices audio >30s and races the whole
+      // detection pass against a 25s deadline — see its doc comment.
       const res = await transcribeAudioToMidi({
         stem: 'keys', timeSegment: 'full', audioFile, analysis,
         bpm: analysis?.detectedBpm ?? 120, key: analysis?.detectedKey ?? 'C Major',
@@ -108,10 +116,22 @@ export function DawShell({ eng, onPresetSelect, onEraSelect }: DawShellProps) {
       setMidiTranscription(res);
       const layers = splitTranscriptionIntoInstrumentLayers(res);
       setMidiLayers(layers);
+      // Auto-switch Column 3 to the DAW Staging Vault so the user immediately sees
+      // the new file cards ready for drag-to-DAW.
+      setCol3Tab('daw-vault');
+      if (res.autoSliced) {
+        eng.showToast(`Track exceeds 30s — auto-sliced to the first ${Math.round(res.effectiveDurationSec)}s to prevent memory exhaustion.`);
+      }
       eng.showToast(`Extracted ${res.notes.length} notes → Lead · Chords · Bass ready`);
-    } catch {
-      eng.showToast('MIDI transcription failed — try again');
+    } catch (err) {
+      if (err instanceof TranscriptionTimeoutError) {
+        eng.showToast('⏱ Transcription timed out. Please try a shorter audio loop or lower resolution.');
+      } else {
+        eng.showToast('MIDI transcription failed — try again');
+      }
     } finally {
+      // Guaranteed to run even on timeout — never leaves the button stuck on
+      // "Transcribing MIDI…" indefinitely.
       setIsMidiTranscribing(false);
     }
   };
@@ -420,148 +440,212 @@ export function DawShell({ eng, onPresetSelect, onEraSelect }: DawShellProps) {
         </div>
       </main>
 
-      {/* ── Column 3: Lyrics Canvas ─────────────────────────────────────── */}
+      {/* ── Column 3: Lyrics Canvas / DAW Staging Vault ────────────────── */}
       <aside className="w-80 shrink-0 flex flex-col border-l border-dock-border bg-dock-surface overflow-hidden">
-        {/* Column header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-dock-border bg-dock-card shrink-0">
-          <FileMusic className="w-4 h-4 text-neon-magenta" />
-          <span className="text-[11px] font-bold uppercase tracking-widest text-ink-200 flex-1">
-            Lyrics Canvas
-          </span>
-          <button
-            type="button"
-            onClick={copyLyrics}
-            title="Copy lyrics"
-            className="p-1 rounded text-ink-500 hover:text-ink-200 transition"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setRailView('style')}
-            title="Open full editor"
-            className="p-1 rounded text-ink-500 hover:text-ink-200 transition"
-          >
-            <Expand className="w-3.5 h-3.5" />
-          </button>
-        </div>
 
-        {/* Lyrics section cards */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {structuralBlocks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Music2 className="w-10 h-10 text-ink-700" />
-              <p className="text-[11px] text-ink-500 italic text-center leading-relaxed">
-                Generate lyrics in the<br />Lyric Canvas to see them<br />as structured cards here.
-              </p>
+        {/* ── Dual-tab toggle header ── */}
+        <div className="shrink-0 border-b border-dock-border bg-dock-card">
+          {/* Tab row */}
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => setCol3Tab('lyrics')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold tracking-wide transition-colors relative ${
+                col3Tab === 'lyrics'
+                  ? 'text-neon-magenta'
+                  : 'text-ink-500 hover:text-ink-300'
+              }`}
+            >
+              <FileMusic className="w-3.5 h-3.5" />
+              Lyrics Canvas
+              {col3Tab === 'lyrics' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neon-magenta rounded-t-full" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCol3Tab('daw-vault')}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold tracking-wide transition-colors relative ${
+                col3Tab === 'daw-vault'
+                  ? 'text-neon-cyan'
+                  : 'text-ink-500 hover:text-ink-300'
+              }`}
+            >
+              <ListMusic className="w-3.5 h-3.5" />
+              DAW Vault
+              {/* Badge showing staged file count when layers exist */}
+              {midiLayers && col3Tab !== 'daw-vault' && (
+                <span className="ml-1 w-4 h-4 rounded-full bg-neon-cyan/20 border border-neon-cyan/40 text-neon-cyan text-[8px] font-bold flex items-center justify-center">
+                  4
+                </span>
+              )}
+              {col3Tab === 'daw-vault' && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-neon-cyan rounded-t-full" />
+              )}
+            </button>
+          </div>
+
+          {/* Contextual action strip (only on lyrics tab) */}
+          {col3Tab === 'lyrics' && (
+            <div className="flex items-center gap-1 px-3 py-1.5 border-t border-dock-border/50">
+              <span className="text-[10px] text-ink-500 flex-1 truncate">
+                {structuralBlocks.length > 0
+                  ? `${structuralBlocks.length} sections`
+                  : 'No lyrics yet'}
+              </span>
+              <button
+                type="button"
+                onClick={copyLyrics}
+                title="Copy lyrics"
+                className="p-1 rounded text-ink-500 hover:text-ink-200 transition"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => setRailView('style')}
-                className="mt-1 text-[11px] px-3 py-1.5 rounded-lg border border-neon-magenta/40 bg-neon-magenta/5 text-neon-magenta hover:bg-neon-magenta/10 transition"
+                title="Open full editor"
+                className="p-1 rounded text-ink-500 hover:text-ink-200 transition"
               >
-                Open Style Studio →
+                <Expand className="w-3.5 h-3.5" />
               </button>
             </div>
-          ) : (
-            structuralBlocks.map(block => {
-              const syllCount = sectionSyllables[block.id] ?? 0;
-              const bodyLines = block.body.split('\n').filter(l => l.trim() && !l.startsWith('['));
-              return (
-                <div
-                  key={block.id}
-                  className={`rounded-2xl border overflow-hidden transition-shadow ${
-                    block.isChorus
-                      ? 'border-fuchsia-500/30 bg-fuchsia-950/20 shadow-[0_0_10px_rgba(217,70,239,0.08)]'
-                      : 'border-dock-border bg-dock-card'
-                  }`}
-                >
-                  {/* Card header */}
-                  <div className={`flex items-center gap-2 px-3 py-2 border-b ${
-                    block.isChorus
-                      ? 'border-fuchsia-500/20 bg-fuchsia-900/20'
-                      : 'border-dock-border bg-dock-hover/50'
-                  }`}>
-                    <span className={`text-[12px] font-bold flex-1 ${
-                      block.isChorus ? 'text-fuchsia-300' : 'text-neon-cyan'
-                    }`}>
-                      {block.label}
-                    </span>
-                    {/* Syllable pill */}
-                    {syllCount > 0 && (
-                      <span className="w-6 h-6 rounded-full bg-neon-magenta/20 border border-neon-magenta/40 text-neon-magenta text-[9px] font-bold flex items-center justify-center shrink-0">
-                        {syllCount > 99 ? '99+' : syllCount}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Card body */}
-                  <div className="px-3 py-2.5">
-                    {bodyLines.length > 0 ? (
-                      <div className="space-y-1">
-                        {bodyLines.slice(0, 6).map((line, li) => (
-                          <p key={li} className="text-[12px] text-ink-200 leading-relaxed font-mono truncate">
-                            {line}
-                          </p>
-                        ))}
-                        {bodyLines.length > 6 && (
-                          <p className="text-[10px] text-ink-500 italic">
-                            +{bodyLines.length - 6} more lines
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-ink-600 italic">Empty section</p>
-                    )}
-                  </div>
-
-                  {/* Card footer — tag pills */}
-                  <div className="flex flex-wrap gap-1 px-3 pb-2.5">
-                    {/* Mood pills (magenta/violet) */}
-                    {moodPills.slice(0, 2).map(mood => (
-                      <span key={mood} className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300 capitalize">
-                        {mood}
-                      </span>
-                    ))}
-                    {genrePill && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-violet-500/10 border border-violet-500/30 text-violet-300 capitalize">
-                        {genrePill}
-                      </span>
-                    )}
-                    {/* Cyan track/key pills */}
-                    {keyPill && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                        {keyPill}
-                      </span>
-                    )}
-                    {block.isChorus && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                        Vocal Focus
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
           )}
         </div>
 
-        {/* Bottom quick-copy bar */}
-        <div className="shrink-0 border-t border-dock-border bg-dock-card px-3 py-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={copyPrompt}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/15 transition"
-          >
-            <Copy className="w-3 h-3" /> Prompt
-          </button>
-          <button
-            type="button"
-            onClick={copyLyrics}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium bg-neon-magenta/10 border border-neon-magenta/30 text-neon-magenta hover:bg-neon-magenta/15 transition"
-          >
-            <Copy className="w-3 h-3" /> Lyrics
-          </button>
-        </div>
+        {/* ── Tab content ── */}
+        {col3Tab === 'daw-vault' ? (
+          /* DAW Staging Vault */
+          <div className="flex-1 overflow-y-auto">
+            <DawStagingVault
+              midiLayers={midiLayers}
+              baseName={audioFile?.name.replace(/\.[^/.]+$/, '') ?? 'Track'}
+              detectedKey={analysis?.detectedKey}
+              bpm={midiTranscription?.bpm ?? analysis?.detectedBpm}
+              onShowToast={eng.showToast}
+            />
+          </div>
+        ) : (
+          /* Lyrics Canvas */
+          <>
+            {/* Lyrics section cards */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {structuralBlocks.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Music2 className="w-10 h-10 text-ink-700" />
+                  <p className="text-[11px] text-ink-500 italic text-center leading-relaxed">
+                    Generate lyrics in the<br />Lyric Canvas to see them<br />as structured cards here.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRailView('style')}
+                    className="mt-1 text-[11px] px-3 py-1.5 rounded-lg border border-neon-magenta/40 bg-neon-magenta/5 text-neon-magenta hover:bg-neon-magenta/10 transition"
+                  >
+                    Open Style Studio →
+                  </button>
+                </div>
+              ) : (
+                structuralBlocks.map(block => {
+                  const syllCount = sectionSyllables[block.id] ?? 0;
+                  const bodyLines = block.body.split('\n').filter(l => l.trim() && !l.startsWith('['));
+                  return (
+                    <div
+                      key={block.id}
+                      className={`rounded-2xl border overflow-hidden transition-shadow ${
+                        block.isChorus
+                          ? 'border-fuchsia-500/30 bg-fuchsia-950/20 shadow-[0_0_10px_rgba(217,70,239,0.08)]'
+                          : 'border-dock-border bg-dock-card'
+                      }`}
+                    >
+                      {/* Card header */}
+                      <div className={`flex items-center gap-2 px-3 py-2 border-b ${
+                        block.isChorus
+                          ? 'border-fuchsia-500/20 bg-fuchsia-900/20'
+                          : 'border-dock-border bg-dock-hover/50'
+                      }`}>
+                        <span className={`text-[12px] font-bold flex-1 ${
+                          block.isChorus ? 'text-fuchsia-300' : 'text-neon-cyan'
+                        }`}>
+                          {block.label}
+                        </span>
+                        {/* Syllable pill */}
+                        {syllCount > 0 && (
+                          <span className="w-6 h-6 rounded-full bg-neon-magenta/20 border border-neon-magenta/40 text-neon-magenta text-[9px] font-bold flex items-center justify-center shrink-0">
+                            {syllCount > 99 ? '99+' : syllCount}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Card body */}
+                      <div className="px-3 py-2.5">
+                        {bodyLines.length > 0 ? (
+                          <div className="space-y-1">
+                            {bodyLines.slice(0, 6).map((line, li) => (
+                              <p key={li} className="text-[12px] text-ink-200 leading-relaxed font-mono truncate">
+                                {line}
+                              </p>
+                            ))}
+                            {bodyLines.length > 6 && (
+                              <p className="text-[10px] text-ink-500 italic">
+                                +{bodyLines.length - 6} more lines
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-ink-600 italic">Empty section</p>
+                        )}
+                      </div>
+
+                      {/* Card footer — tag pills */}
+                      <div className="flex flex-wrap gap-1 px-3 pb-2.5">
+                        {/* Mood pills */}
+                        {moodPills.slice(0, 2).map(mood => (
+                          <span key={mood} className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300 capitalize">
+                            {mood}
+                          </span>
+                        ))}
+                        {genrePill && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-violet-500/10 border border-violet-500/30 text-violet-300 capitalize">
+                            {genrePill}
+                          </span>
+                        )}
+                        {keyPill && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+                            {keyPill}
+                          </span>
+                        )}
+                        {block.isChorus && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+                            Vocal Focus
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Bottom quick-copy bar */}
+            <div className="shrink-0 border-t border-dock-border bg-dock-card px-3 py-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={copyPrompt}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan hover:bg-neon-cyan/15 transition"
+              >
+                <Copy className="w-3 h-3" /> Prompt
+              </button>
+              <button
+                type="button"
+                onClick={copyLyrics}
+                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium bg-neon-magenta/10 border border-neon-magenta/30 text-neon-magenta hover:bg-neon-magenta/15 transition"
+              >
+                <Copy className="w-3 h-3" /> Lyrics
+              </button>
+            </div>
+          </>
+        )}
       </aside>
 
       <LicensingModal isOpen={isLicensingOpen} onClose={() => setIsLicensingOpen(false)} onShowToast={eng.showToast} />
