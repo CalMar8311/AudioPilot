@@ -26,6 +26,7 @@ import { downloadMidiBlob } from '@/utils/midiEncoder';
 import { countSyllables } from '@/engine/lyricEngine';
 import { LicensingModal } from '@/components/LicensingModal';
 import { Toast } from '@/components/Toast';
+import { MidiStagingRoll } from '@/components/daw/MidiStagingRoll';
 
 // ── Structural section parser (DAW-dock-local) ───────────────────────────────
 const STRUCT_RE = /^(?:Intro|Verse\s*\d*|Chorus\s*\d*|Bridge|Pre-Chorus|Hook|Outro)/i;
@@ -67,77 +68,8 @@ function parseDawBlocks(lyrics: string): DawBlock[] {
   return blocks;
 }
 
-// ── Mini piano helpers ───────────────────────────────────────────────────────
-const NOTE_SEMI: Record<string, number> = {
-  C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,Gb:6,G:7,'G#':8,Ab:8,A:9,'A#':10,Bb:10,B:11,
-};
-const WHITE_SEMI = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B per octave
-const BLACK_SEMI = [1, 3, -1, 6, 8, 10, -1]; // -1 = no black key after E/B
-
-function getActiveKeys(detectedKey?: string): Set<number> {
-  if (!detectedKey) return new Set();
-  const root = detectedKey.trim().split(/\s+/)[0];
-  const rootSemi = NOTE_SEMI[root] ?? 0;
-  const isMinor = /minor/i.test(detectedKey);
-  // Triad intervals: major = 0,4,7 ; minor = 0,3,7
-  const intervals = isMinor ? [0, 3, 7] : [0, 4, 7];
-  return new Set(intervals.map(i => (rootSemi + i) % 12));
-}
-
 // ── Icon rail view types ─────────────────────────────────────────────────────
 type RailView = 'dock' | 'remix' | 'style' | 'export';
-
-// ── MiniPiano component ──────────────────────────────────────────────────────
-function MiniPiano({ detectedKey }: { detectedKey?: string }) {
-  const active = getActiveKeys(detectedKey);
-  const octaves = 2;
-  const whiteCount = 7 * octaves;
-
-  return (
-    <div className="relative flex h-12 select-none mt-2" style={{ width: '100%' }}>
-      {/* White keys */}
-      {Array.from({ length: whiteCount }, (_, wi) => {
-        const octave = Math.floor(wi / 7);
-        const posInOct = wi % 7;
-        const semi = WHITE_SEMI[posInOct] + octave * 12;
-        const isActive = active.has(semi % 12);
-        return (
-          <div
-            key={`w${wi}`}
-            className={`flex-1 border-r border-dock-border rounded-b-sm transition-colors ${
-              isActive
-                ? 'bg-neon-cyan/90 shadow-[0_0_8px_rgba(6,182,212,0.8)]'
-                : 'bg-ink-200/90 hover:bg-ink-100'
-            }`}
-          />
-        );
-      })}
-
-      {/* Black keys — absolutely positioned */}
-      {Array.from({ length: whiteCount }, (_, wi) => {
-        const octave = Math.floor(wi / 7);
-        const posInOct = wi % 7;
-        const blackSemi = BLACK_SEMI[posInOct];
-        if (blackSemi < 0) return null;
-        const semi = blackSemi + octave * 12;
-        const isActive = active.has(semi % 12);
-        const leftPct = ((wi + 0.65) / whiteCount) * 100;
-        const widthPct = (0.6 / whiteCount) * 100;
-        return (
-          <div
-            key={`b${wi}`}
-            className={`absolute top-0 z-10 rounded-b transition-colors ${
-              isActive
-                ? 'bg-neon-cyan shadow-[0_0_6px_rgba(6,182,212,0.9)]'
-                : 'bg-ink-800'
-            }`}
-            style={{ left: `${leftPct}%`, width: `${widthPct}%`, height: '60%' }}
-          />
-        );
-      })}
-    </div>
-  );
-}
 
 // ── Main DawShell ────────────────────────────────────────────────────────────
 interface DawShellProps {
@@ -376,14 +308,16 @@ export function DawShell({ eng, onPresetSelect, onEraSelect }: DawShellProps) {
             </div>
           )}
 
-          {/* Mini piano keyboard */}
-          <div className="rounded-lg overflow-hidden border border-dock-border bg-dock-bg px-2 pb-2 pt-1">
-            <span className="text-[9px] text-ink-600 uppercase tracking-widest">
-              {analysis?.detectedKey ?? 'Key'} — Active chord tones
-            </span>
-            <MiniPiano detectedKey={analysis?.detectedKey} />
-          </div>
         </div>
+
+        {/* DAW Staging Roll — piano roll + transport + drag-to-DAW */}
+        {midiLayers && (
+          <MidiStagingRoll
+            midiLayers={midiLayers}
+            baseName={audioFile?.name.replace(/\.[^/.]+$/, '') ?? 'Track'}
+            onShowToast={eng.showToast}
+          />
+        )}
 
         {/* MIDI Track Export Deck */}
         <div className="rounded-2xl bg-dock-card border border-dock-border p-5 flex flex-col gap-4 shadow-panel">
