@@ -8,6 +8,15 @@ export default {
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
+        dock: {
+          bg: '#0b0d11',
+          surface: '#12151c',
+          card: '#161920',
+          border: '#1e2430',
+          active: '#0e1520',
+          hover: '#1a1f2e',
+          rail: '#0d0f16',
+        },
         ink: {
           950: '#05060a',
           900: '#0a0c14',
