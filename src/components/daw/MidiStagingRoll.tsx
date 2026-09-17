@@ -132,8 +132,13 @@ export function MidiStagingRoll({ midiLayers, baseName, onShowToast }: MidiStagi
       setBlobUrls({ lead: null, chords: null, bass: null });
       return;
     }
-    const make = (d: Uint8Array) =>
-      URL.createObjectURL(new Blob([d], { type: 'audio/midi' }));
+    // Copy to a fresh ArrayBuffer-backed Uint8Array so Blob constructor type-checks cleanly
+    // (midiData is Uint8Array<ArrayBufferLike> which may include SharedArrayBuffer variants).
+    const make = (d: Uint8Array) => {
+      const copy = new Uint8Array(d.byteLength);
+      copy.set(d);
+      return URL.createObjectURL(new Blob([copy], { type: 'audio/midi' }));
+    };
     const urls: Record<LayerKey, string | null> = {
       lead:   make(midiLayers.lead.midiData),
       chords: make(midiLayers.chords.midiData),
