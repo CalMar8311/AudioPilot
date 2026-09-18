@@ -1232,7 +1232,7 @@ function TrackControlCluster({
   onVolumeChange: (v: number) => void;
 }) {
   return (
-    <div className="flex items-center gap-1.5 shrink-0">
+    <div className="flex items-center gap-1 shrink-0">
       <button
         type="button"
         onClick={onToggleSolo}
@@ -1267,10 +1267,10 @@ function VolumeKnob({ color, value, onChange }: { color: string; value: number; 
       type="button"
       onClick={cycle}
       title={`Volume: ${value}%`}
-      className="relative w-7 h-7 rounded-full bg-ink-900 border border-ink-700 hover:border-ink-500 transition shrink-0"
+      className="relative w-6 h-6 rounded-full bg-ink-900 border border-ink-700 hover:border-ink-500 transition shrink-0"
     >
       <div className="absolute inset-0 flex items-start justify-center" style={{ transform: `rotate(${angle}deg)` }}>
-        <span className="w-0.5 h-2.5 rounded-full mt-1" style={{ backgroundColor: color }} />
+        <span className="w-0.5 h-2 rounded-full mt-0.5" style={{ backgroundColor: color }} />
       </div>
     </button>
   );
