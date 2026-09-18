@@ -307,10 +307,10 @@ async function renderStemBuffer(masterBuf: AudioBuffer, stemId: UpperRowId): Pro
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STEM_PITCH_RANGES: Record<UpperRowId, [min: number, max: number]> = {
-  lead:   [72, 127], // C5 and above — top-line melody
-  chords: [48, 71],  // C3–B4 — mid-range polyphony
-  bass:   [0,  48],  // C-1–C3 — sub-bass / bass lines
-  drums:  [0,  127], // all pitches — drums are transient, not pitch-filtered
+  lead:   [72, 127], // ≥ C5 (MIDI 72) — top-line melody
+  chords: [48, 71],  // C3–B4 (MIDI 48–71) — mid-range polyphony
+  bass:   [0,  47],  // ≤ B2 (MIDI 47) — strict sub-bass / bass lines (< C3)
+  drums:  [0,  127], // all pitches — drums use transient detection, not pitch register
 };
 
 function toMonophonicHighest(notes: MidiNote[]): MidiNote[] {
@@ -681,23 +681,40 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
     if (!audioFile) { showToast('Upload an audio file first'); return; }
     setRowTranscribing(row.id);
     try {
+      // For ALL melodic stems (lead / chords / bass) we request the full
+      // unfiltered polyphonic transcription ('keys' stem type = no engine-side
+      // register filter). This gives us the maximum note yield and lets us
+      // apply strict, non-overlapping pitch partitions below as the single
+      // source-of-truth filter.  Drums keep their dedicated transient detector.
+      const engineStem: StemType = row.id === 'drums' ? 'drums' : 'keys';
+
       const res = await transcribeAudioToMidi({
-        stem: row.stem, timeSegment: 'full', audioFile, analysis,
+        stem: engineStem, timeSegment: 'full', audioFile, analysis,
         bpm: effectiveBpm, key: effectiveKey,
       });
 
-      // Filter notes to this stem's assigned pitch register, then re-encode MIDI
+      // ── Single-pass strict pitch-register partition ───────────────────
+      // Bass  : midiNumber <=47 (strict < C3)
+      // Chords: midiNumber  48–71  (C3–B4)
+      // Lead  : midiNumber >=72 (C5+), then reduced to monophonic top note
+      // Drums : all pitches (transient GM percussion notes)
       const filteredNotes = filterNotesByStem(res.notes, row.id);
-      const filteredMidi = generateMidiFile(filteredNotes, row.label, effectiveBpm);
-      const stemResult: TranscriptionResult = { ...res, notes: filteredNotes, midiData: filteredMidi };
+      const filteredMidi  = generateMidiFile(filteredNotes, row.label, effectiveBpm);
+      const stemResult: TranscriptionResult = {
+        ...res,
+        stem:      engineStem,
+        stemLabel: row.label,
+        notes:     filteredNotes,
+        midiData:  filteredMidi,
+      };
 
       setRowTranscriptions(prev => ({ ...prev, [row.id]: stemResult }));
       if (res.autoSliced) {
         showToast(`Track exceeds 30s — auto-sliced to the first ${Math.round(res.effectiveDurationSec)}s to prevent memory exhaustion.`);
       }
-      const filtered = res.notes.length - filteredNotes.length;
-      const filterNote = filtered > 0 ? ` (${filtered} out-of-register notes removed)` : '';
-      showToast(`${row.label}: ${filteredNotes.length} notes extracted${filterNote} → "${row.label}.mid" ready to drag`);
+      const removed = res.notes.length - filteredNotes.length;
+      const registerNote = removed > 0 ? ` (${removed} out-of-register notes removed)` : '';
+      showToast(`${row.label}: ${filteredNotes.length} notes extracted${registerNote} → "${row.label}.mid" ready to drag`);
     } catch (err) {
       if (err instanceof TranscriptionTimeoutError) {
         showToast('⏱ Transcription timed out. Please try a shorter audio loop or lower resolution.');
@@ -716,14 +733,33 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
     showToast(`Downloaded ${row.label}.mid (${t.notes.length} notes)`);
   };
 
-  // ── Copy MIDI to clipboard (base64 data URI) with 2 s visual feedback ──
+  // ── Copy MIDI to clipboard — re-serialises from in-memory notes (never
+  //    reuses a stale cached blob URL). Shows a stem-specific count toast.
   const [copyStates, setCopyStates] = useState<Record<string, 'idle' | 'copied'>>({});
 
-  const handleCopyMidi = useCallback(async (id: string, blobUrl: string | null, label: string) => {
-    if (!blobUrl) { showToast('Convert to MIDI first'); return; }
+  const handleCopyMidi = useCallback(async (
+    stemId: UpperRowId,
+    copyKey: string = stemId,
+    overrideLabel?: string,
+  ) => {
+    const transcription = rowTranscriptions[stemId];
+    const rowLabel = overrideLabel
+      ?? UPPER_ROWS.find(r => r.id === stemId)?.label
+      ?? stemId;
+
+    if (!transcription || transcription.notes.length === 0) {
+      showToast(`Run "Convert to MIDI" on the ${rowLabel} track first`);
+      return;
+    }
+
+    const noteCount = transcription.notes.length;
+
+    // Re-encode from the in-memory note array — guarantees this stem's data,
+    // not a potentially-shared or stale cached blob URL.
+    const freshMidi = generateMidiFile(transcription.notes, rowLabel, effectiveBpm);
+    const blob = new Blob([freshMidi.buffer as ArrayBuffer], { type: 'audio/midi' });
+
     try {
-      const resp = await fetch(blobUrl);
-      const blob = await resp.blob();
       const dataUri = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -731,20 +767,15 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
         reader.readAsDataURL(blob);
       });
       await navigator.clipboard.writeText(dataUri);
-      setCopyStates(prev => ({ ...prev, [id]: 'copied' }));
-      setTimeout(() => setCopyStates(prev => ({ ...prev, [id]: 'idle' })), 2000);
-      showToast(`MIDI data URI copied — paste into any text field or share`);
+      setCopyStates(prev => ({ ...prev, [copyKey]: 'copied' }));
+      setTimeout(() => setCopyStates(prev => ({ ...prev, [copyKey]: 'idle' })), 2000);
+      showToast(`Copied ${rowLabel.toUpperCase()} MIDI (${noteCount} notes) to clipboard`);
     } catch {
-      // Fallback: silently trigger a local download
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `${label.replace(/[^a-z0-9]+/gi, '_')}.mid`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      showToast('Clipboard unavailable — MIDI file downloaded as fallback');
+      // Fallback: silent local download
+      downloadMidiBlob(freshMidi, `${rowLabel.replace(/[^a-z0-9]+/gi, '_')}.mid`);
+      showToast(`Clipboard unavailable — ${rowLabel} MIDI downloaded as fallback`);
     }
-  }, [showToast]);
+  }, [rowTranscriptions, effectiveBpm, showToast]);
 
   const handleExportStemAudio = (row: UpperRowConfig) => {
     if (!audioFile || !audioFileBlobUrl) { showToast('Upload an audio file first'); return; }
@@ -1080,7 +1111,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                         disabled={!audioFile}
                         onConvert={() => void handleConvertRow(row)}
                         onSave={() => handleSaveRowMidi(row)}
-                        onCopy={() => void handleCopyMidi(row.id, rowBlobUrls[row.id], row.label)}
+                        onCopy={() => void handleCopyMidi(row.id)}
                         copyState={copyStates[row.id] ?? 'idle'}
                         onDragStart={(e) => beginNativeDrag(e, `${row.label.replace(/[^a-z0-9]+/gi, '_')}.mid`, rowBlobUrls[row.id])}
                       />
@@ -1378,8 +1409,12 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                         </div>
                         <button
                           type="button"
-                          onClick={() => void handleCopyMidi(`lower-${row.id}`, bundleBlobUrl, `${row.label}_MIDI`)}
-                          title={copyStates[`lower-${row.id}`] === 'copied' ? '✓ Copied!' : 'Copy MIDI data URI'}
+                          onClick={() => void handleCopyMidi(
+                            row.id as UpperRowId,
+                            `lower-${row.id}`,
+                            LOWER_ROWS.find(r => r.id === row.id)?.label,
+                          )}
+                          title={copyStates[`lower-${row.id}`] === 'copied' ? '✓ Copied!' : 'Copy stem MIDI to clipboard'}
                           className={`p-1 rounded transition ${copyStates[`lower-${row.id}`] === 'copied' ? 'text-emerald-400' : 'text-ink-500 hover:text-neon-cyan'}`}
                         >
                           {copyStates[`lower-${row.id}`] === 'copied'
