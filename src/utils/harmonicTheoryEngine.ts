@@ -43,10 +43,10 @@ const NOTE_NAMES_FLAT = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭'
 
 const LETTER_BASE_SEMITONES: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-type ChordQuality = 'maj' | 'min' | 'dim';
+export type ChordQuality = 'maj' | 'min' | 'dim';
 
 /** Parses a root note like "F#", "B♭", "Bb", "C" into a semitone index (0–11) + accidental preference. */
-function parseRootKey(rootKey: string): { semitone: number; preferFlats: boolean } {
+export function parseRootKey(rootKey: string): { semitone: number; preferFlats: boolean } {
   const cleaned = rootKey.trim();
   const match = cleaned.match(/^([A-Ga-g])\s*([#♯b♭]?)/);
   if (!match) return { semitone: 0, preferFlats: false };
@@ -78,12 +78,12 @@ export function parseKeyString(keyString: string): { rootKey: string; scale: Sca
   return { rootKey, scale };
 }
 
-function formatNote(semitone: number, preferFlats: boolean): string {
+export function formatNote(semitone: number, preferFlats: boolean): string {
   const normalized = ((semitone % 12) + 12) % 12;
   return (preferFlats ? NOTE_NAMES_FLAT : NOTE_NAMES_SHARP)[normalized];
 }
 
-function chordSymbol(semitone: number, quality: ChordQuality, preferFlats: boolean, extension: string = ''): string {
+export function chordSymbol(semitone: number, quality: ChordQuality, preferFlats: boolean, extension: string = ''): string {
   const name = formatNote(semitone, preferFlats);
   const qualitySuffix = quality === 'min' ? 'm' : quality === 'dim' ? '°' : '';
   return `${name}${qualitySuffix}${extension}`;

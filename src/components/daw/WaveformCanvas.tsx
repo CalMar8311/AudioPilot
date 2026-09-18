@@ -18,6 +18,8 @@ interface WaveformCanvasProps {
   onSeek?: (sec: number) => void;
   /** Fires once per decoded file with the actual buffer duration (seconds). */
   onDuration?: (durationSec: number) => void;
+  /** Number of subtle vertical bar-grid divisions drawn behind the waveform (DAW channel-strip look). Default 8. */
+  gridDivisions?: number;
 }
 
 const BUCKET_COUNT = 300;
@@ -31,6 +33,7 @@ export function WaveformCanvas({
   dimmed = false,
   onSeek,
   onDuration,
+  gridDivisions = 8,
 }: WaveformCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -110,6 +113,19 @@ export function WaveformCanvas({
     ctx.fillStyle = '#0b0d11';
     ctx.fillRect(0, 0, cssW, cssH);
 
+    // Subtle bar-grid divisions — gives empty channels a "ready to record" look
+    if (gridDivisions > 1) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < gridDivisions; i++) {
+        const gx = Math.round((cssW / gridDivisions) * i) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(gx, 0);
+        ctx.lineTo(gx, cssH);
+        ctx.stroke();
+      }
+    }
+
     // Center line
     ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
@@ -151,7 +167,7 @@ export function WaveformCanvas({
     }
 
     ctx.restore();
-  }, [peaks, accentColor, progressSec, totalDurationSec, heightPx, dimmed]);
+  }, [peaks, accentColor, progressSec, totalDurationSec, heightPx, dimmed, gridDivisions]);
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!onSeek || totalDurationSec <= 0) return;
