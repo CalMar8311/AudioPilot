@@ -135,23 +135,61 @@ function midiToHz(midi: number): number {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-function scheduleNotes(actx: AudioContext, notes: MidiNote[], startOffsetSec: number): OscillatorNode[] {
+/**
+ * Enhanced per-stem MIDI synthesis fallback.
+ * - Bass register (≤48): sawtooth + lowpass filter for sub-bass warmth.
+ * - Mid register (49-59): triangle (Rhodes-like mellow warmth).
+ * - Lead/High (≥60): sine for a clean synth lead feel.
+ * All notes get a proper linear-attack + exponential-release ADSR envelope.
+ */
+function scheduleNotesStemAware(actx: AudioContext, notes: MidiNote[], startOffsetSec: number): OscillatorNode[] {
   const now = actx.currentTime;
   const nodes: OscillatorNode[] = [];
+
+  // Master limiter gain — prevents clipping when many notes play simultaneously
+  const master = actx.createGain();
+  master.gain.value = 0.5;
+  master.connect(actx.destination);
+
   for (const n of notes) {
     if (n.startTimeSec + n.durationSec < startOffsetSec - 0.01) continue;
     const startAt = now + Math.max(0, n.startTimeSec - startOffsetSec);
-    const dur = Math.min(n.durationSec, 1.8);
-    const peakGain = Math.max(0.02, Math.min(0.2, (n.velocity / 127) * 0.18));
+    const dur = Math.min(n.durationSec, 2.8);
+    const peakGain = Math.max(0.02, Math.min(0.28, (n.velocity / 127) * 0.24));
+
     const osc = actx.createOscillator();
-    const gain = actx.createGain();
-    osc.type = 'triangle';
+    const env = actx.createGain();
+
+    if (n.midiNumber <= 48) {
+      // Bass — sawtooth through a lowpass filter
+      osc.type = 'sawtooth';
+      const flt = actx.createBiquadFilter();
+      flt.type = 'lowpass';
+      flt.frequency.value = 350;
+      flt.Q.value = 1.2;
+      osc.connect(flt);
+      flt.connect(env);
+    } else if (n.midiNumber <= 59) {
+      // Mid/Chords — triangle for a warm piano-ish tone
+      osc.type = 'triangle';
+      osc.connect(env);
+    } else {
+      // Lead/Vocals — clean sine
+      osc.type = 'sine';
+      osc.connect(env);
+    }
+
     osc.frequency.value = midiToHz(n.midiNumber);
-    gain.gain.setValueAtTime(0.0001, startAt);
-    gain.gain.exponentialRampToValueAtTime(peakGain, startAt + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, startAt + dur);
-    osc.connect(gain);
-    gain.connect(actx.destination);
+
+    // Linear attack + exponential release
+    const attack = 0.012;
+    const release = Math.min(dur * 0.35, 0.3);
+    env.gain.setValueAtTime(0.0001, startAt);
+    env.gain.linearRampToValueAtTime(peakGain, startAt + attack);
+    env.gain.setValueAtTime(peakGain, startAt + dur - release);
+    env.gain.exponentialRampToValueAtTime(0.0001, startAt + dur);
+
+    env.connect(master);
     osc.start(startAt);
     osc.stop(startAt + dur + 0.05);
     nodes.push(osc);
@@ -262,6 +300,29 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
 
   // ── Timeline / duration ────────────────────────────────────────────────
   const [decodedDurationSec, setDecodedDurationSec] = useState(0);
+
+  // ── Natural audio preview: decode audioFile → AudioBuffer ─────────────
+  // This lets the ▶ button play the actual audio instead of oscillator beeps.
+  const [decodedAudioBuffer, setDecodedAudioBuffer] = useState<AudioBuffer | null>(null);
+  useEffect(() => {
+    if (!audioFile) { setDecodedAudioBuffer(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const arrayBuf = await audioFile.arrayBuffer();
+        const AudioCtxCtor = getAudioContextCtor();
+        const tmpCtx = new AudioCtxCtor();
+        let buf: AudioBuffer;
+        try { buf = await tmpCtx.decodeAudioData(arrayBuf); }
+        finally { await tmpCtx.close(); }
+        if (!cancelled) {
+          setDecodedAudioBuffer(buf);
+          setDecodedDurationSec(buf.duration);
+        }
+      } catch { /* ignore decode errors — WaveformCanvas also decodes separately */ }
+    })();
+    return () => { cancelled = true; };
+  }, [audioFile]);
   const allTranscribedNotes = useMemo(
     () => Object.values(rowTranscriptions).flatMap(r => r?.notes ?? []),
     [rowTranscriptions],
@@ -279,12 +340,15 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
   const [playheadSec, setPlayheadSec] = useState(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const oscNodesRef = useRef<OscillatorNode[]>([]);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const playStartRef = useRef<{ ctxTime: number; offsetSec: number }>({ ctxTime: 0, offsetSec: 0 });
 
   const stopPlayback = useCallback(() => {
     oscNodesRef.current.forEach(o => { try { o.stop(); } catch { /* already stopped */ } });
     oscNodesRef.current = [];
+    try { sourceNodeRef.current?.stop(); } catch { /* already stopped */ }
+    sourceNodeRef.current = null;
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
     setIsPlaying(false);
@@ -311,14 +375,35 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
 
   const handleTogglePlay = () => {
     if (isPlaying) { stopPlayback(); return; }
-    if (combinedPlaybackNotes.length === 0) {
-      showToast('Run "Convert to MIDI" on at least one track first to preview playback');
+
+    if (!decodedAudioBuffer && combinedPlaybackNotes.length === 0) {
+      showToast('Upload an audio file to enable playback');
       return;
     }
+
     if (!audioCtxRef.current) audioCtxRef.current = new (getAudioContextCtor())();
     const actx = audioCtxRef.current;
     const startOffset = playheadSec >= totalDurationSec ? 0 : playheadSec;
-    oscNodesRef.current = scheduleNotes(actx, combinedPlaybackNotes, startOffset);
+
+    if (decodedAudioBuffer) {
+      // ── Natural audio playback from the decoded buffer ──────────────────
+      const src = actx.createBufferSource();
+      src.buffer = decodedAudioBuffer;
+      src.connect(actx.destination);
+      src.start(0, startOffset);
+      sourceNodeRef.current = src;
+      // onended fires when clip naturally reaches end
+      src.onended = () => {
+        if (sourceNodeRef.current === src) {
+          setPlayheadSec(0);
+          stopPlayback();
+        }
+      };
+    } else {
+      // ── Enhanced MIDI synthesis fallback ────────────────────────────────
+      oscNodesRef.current = scheduleNotesStemAware(actx, combinedPlaybackNotes, startOffset);
+    }
+
     playStartRef.current = { ctxTime: actx.currentTime, offsetSec: startOffset };
     setIsPlaying(true);
 
@@ -447,6 +532,36 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
     downloadMidiBlob(t.midiData, `${row.label.replace(/[^a-z0-9]+/gi, '_')}.mid`);
     showToast(`Downloaded ${row.label}.mid (${t.notes.length} notes)`);
   };
+
+  // ── Copy MIDI to clipboard (base64 data URI) with 2 s visual feedback ──
+  const [copyStates, setCopyStates] = useState<Record<string, 'idle' | 'copied'>>({});
+
+  const handleCopyMidi = useCallback(async (id: string, blobUrl: string | null, label: string) => {
+    if (!blobUrl) { showToast('Convert to MIDI first'); return; }
+    try {
+      const resp = await fetch(blobUrl);
+      const blob = await resp.blob();
+      const dataUri = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      await navigator.clipboard.writeText(dataUri);
+      setCopyStates(prev => ({ ...prev, [id]: 'copied' }));
+      setTimeout(() => setCopyStates(prev => ({ ...prev, [id]: 'idle' })), 2000);
+      showToast(`MIDI data URI copied — paste into any text field or share`);
+    } catch {
+      // Fallback: silently trigger a local download
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${label.replace(/[^a-z0-9]+/gi, '_')}.mid`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToast('Clipboard unavailable — MIDI file downloaded as fallback');
+    }
+  }, [showToast]);
 
   const handleExportStemAudio = (row: UpperRowConfig) => {
     if (!audioFile || !audioFileBlobUrl) { showToast('Upload an audio file first'); return; }
@@ -781,6 +896,8 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                         disabled={!audioFile}
                         onConvert={() => void handleConvertRow(row)}
                         onSave={() => handleSaveRowMidi(row)}
+                        onCopy={() => void handleCopyMidi(row.id, rowBlobUrls[row.id], row.label)}
+                        copyState={copyStates[row.id] ?? 'idle'}
                         onDragStart={(e) => beginNativeDrag(e, `${row.label.replace(/[^a-z0-9]+/gi, '_')}.mid`, rowBlobUrls[row.id])}
                       />
                     </div>
@@ -1044,15 +1161,11 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                       </div>
                       <Download className="w-3 h-3 text-emerald-400 relative z-10" />
                     </div>
-                    {/* MIDI mini card */}
+                    {/* MIDI mini card — with Copy overlay button */}
                     <div
-                      draggable={!!bundleBlobUrl}
-                      onDragStart={e => beginNativeDrag(e, bundleFilename, bundleBlobUrl)}
-                      onClick={() => void handleExportMidiBundle()}
-                      title={bundleBlobUrl ? 'Drag MIDI into DAW' : 'Click header to build bundle'}
                       className={`flex-1 h-full flex flex-col items-center justify-center gap-0.5 rounded-md border relative overflow-hidden transition select-none ${
                         audioFile
-                          ? 'border-neon-cyan/30 bg-neon-cyan/06 cursor-grab active:cursor-grabbing hover:brightness-125'
+                          ? 'border-neon-cyan/30 bg-neon-cyan/06'
                           : 'border-dock-border/40 opacity-40'
                       }`}
                     >
@@ -1067,7 +1180,28 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                           </div>
                         ))}
                       </div>
-                      <FileMusic className="w-3 h-3 text-neon-cyan relative z-10" />
+                      {/* Drag + Copy row */}
+                      <div className="flex items-center gap-0.5 relative z-10">
+                        <div
+                          draggable={!!bundleBlobUrl}
+                          onDragStart={e => beginNativeDrag(e, bundleFilename, bundleBlobUrl)}
+                          onClick={() => void handleExportMidiBundle()}
+                          title={bundleBlobUrl ? 'Drag MIDI into DAW' : 'Click to build bundle'}
+                          className={`p-1 rounded transition ${bundleBlobUrl ? 'text-neon-cyan cursor-grab active:cursor-grabbing hover:text-white' : 'text-ink-600'}`}
+                        >
+                          <FileMusic className="w-3 h-3" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyMidi(`lower-${row.id}`, bundleBlobUrl, `${row.label}_MIDI`)}
+                          title={copyStates[`lower-${row.id}`] === 'copied' ? '✓ Copied!' : 'Copy MIDI data URI'}
+                          className={`p-1 rounded transition ${copyStates[`lower-${row.id}`] === 'copied' ? 'text-emerald-400' : 'text-ink-500 hover:text-neon-cyan'}`}
+                        >
+                          {copyStates[`lower-${row.id}`] === 'copied'
+                            ? <span className="text-[8px] font-bold">✓</span>
+                            : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1298,7 +1432,7 @@ function ExportStemCard({ row, disabled, onExport }: { row: UpperRowConfig; disa
 }
 
 function ConvertToMidiCard({
-  row, transcription, blobUrl, isTranscribing, disabled, onConvert, onSave, onDragStart,
+  row, transcription, blobUrl, isTranscribing, disabled, onConvert, onSave, onCopy, copyState, onDragStart,
 }: {
   row: UpperRowConfig;
   transcription: TranscriptionResult | null;
@@ -1307,6 +1441,8 @@ function ConvertToMidiCard({
   disabled: boolean;
   onConvert: () => void;
   onSave: () => void;
+  onCopy: () => void;
+  copyState: 'idle' | 'copied';
   onDragStart: (e: DragEvent<HTMLDivElement>) => void;
 }) {
   const filename = `${row.label.replace(/[^a-z0-9]+/gi, '_')}.mid`;
@@ -1345,9 +1481,22 @@ function ConvertToMidiCard({
             {transcription.notes.length}n
           </div>
           <div className="flex gap-1 relative z-10">
-            <button type="button" onClick={onSave} title="Download" className="p-1 rounded text-ink-400 hover:text-ink-200 transition">
+            {/* Download */}
+            <button type="button" onClick={onSave} title="Download .mid" className="p-1 rounded text-ink-400 hover:text-ink-200 transition">
               <Download className="w-3 h-3" />
             </button>
+            {/* Copy MIDI data URI */}
+            <button
+              type="button"
+              onClick={onCopy}
+              title={copyState === 'copied' ? '✓ Copied!' : 'Copy MIDI data URI'}
+              className={`p-1 rounded transition ${copyState === 'copied' ? 'text-emerald-400' : 'text-ink-400 hover:text-neon-cyan'}`}
+            >
+              {copyState === 'copied'
+                ? <span className="text-[8px] font-bold text-emerald-400">✓</span>
+                : <Copy className="w-3 h-3" />}
+            </button>
+            {/* Drag handle */}
             <div
               draggable
               onDragStart={onDragStart}
