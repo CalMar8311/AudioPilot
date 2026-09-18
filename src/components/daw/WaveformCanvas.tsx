@@ -6,6 +6,12 @@ import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'r
 
 interface WaveformCanvasProps {
   audioFile: File | null;
+  /**
+   * Pre-decoded (and optionally pre-filtered) AudioBuffer.
+   * When provided it takes priority over `audioFile` for peak extraction —
+   * no async decode is needed, enabling per-stem waveform rendering.
+   */
+  audioBuffer?: AudioBuffer | null;
   /** Hex accent color for the waveform bars, e.g. "#a855f7". */
   accentColor: string;
   /** Current playback position in seconds, drives the scrubber line. */
@@ -30,6 +36,7 @@ const BUCKET_COUNT = 300;
 
 export function WaveformCanvas({
   audioFile,
+  audioBuffer,
   accentColor,
   progressSec,
   totalDurationSec,
@@ -61,8 +68,31 @@ export function WaveformCanvas({
     return () => ro.disconnect();
   }, [heightPx]);
 
-  // ── Decode audio → peak buckets (min/max amplitude per bucket) ───────────
+  // ── Fast path: extract peaks from pre-decoded AudioBuffer (no async I/O) ─
   useEffect(() => {
+    if (!audioBuffer) return;
+    const ch = audioBuffer.getChannelData(0);
+    const bucketSize = Math.max(1, Math.floor(ch.length / BUCKET_COUNT));
+    const result = new Float32Array(BUCKET_COUNT);
+    for (let b = 0; b < BUCKET_COUNT; b++) {
+      const start = b * bucketSize;
+      const end = Math.min(ch.length, start + bucketSize);
+      let max = 0;
+      for (let i = start; i < end; i++) {
+        const v = Math.abs(ch[i]);
+        if (v > max) max = v;
+      }
+      result[b] = max;
+    }
+    setPeaks(result);
+    // Note: onDuration is intentionally omitted here — callers that supply
+    // audioBuffer already know the duration from the master decode.
+  }, [audioBuffer]);
+
+  // ── Slow path: decode audio File → peak buckets (only when no audioBuffer) ─
+  useEffect(() => {
+    // audioBuffer takes priority — skip file decode when it's available
+    if (audioBuffer) return;
     let cancelled = false;
     if (!audioFile) { setPeaks(null); return; }
 
@@ -105,7 +135,7 @@ export function WaveformCanvas({
     })();
 
     return () => { cancelled = true; };
-  }, [audioFile]);
+  }, [audioFile, audioBuffer]);
 
   // ── Draw ───────────────────────────────────────────────────────────────
   useEffect(() => {

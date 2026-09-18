@@ -36,7 +36,7 @@ import {
   type TranscriptionResult,
   type MultiTrackMidiResult,
 } from '@/engine/audioToMidiEngine';
-import { downloadMidiBlob, type MidiNote } from '@/utils/midiEncoder';
+import { downloadMidiBlob, generateMidiFile, type MidiNote } from '@/utils/midiEncoder';
 import { analyzeAudioWithGemini } from '@/services/geminiAudio';
 import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import {
@@ -205,6 +205,145 @@ function getAudioContextCtor(): typeof AudioContext {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DSP Stem Separation — renders each stem's frequency band into a new
+// AudioBuffer via OfflineAudioContext + BiquadFilter chains.
+//
+// Lead   : highpass 300 Hz + peaking boost at 2500 Hz (presence/voice range)
+// Chords : highpass 300 Hz → lowpass 3000 Hz (mid-range instruments)
+// Bass   : lowpass 220 Hz (sub-bass / kick body)
+// Drums  : highpass 3000 Hz (transients + hats) + lowpass 80 Hz (kick sub),
+//          mixed 50/50 via a GainNode.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function renderStemBuffer(masterBuf: AudioBuffer, stemId: UpperRowId): Promise<AudioBuffer> {
+  const { numberOfChannels, sampleRate, length } = masterBuf;
+  const offCtx = new OfflineAudioContext(numberOfChannels, length, sampleRate);
+
+  const makeSource = () => {
+    const s = offCtx.createBufferSource();
+    s.buffer = masterBuf;
+    return s;
+  };
+
+  switch (stemId) {
+    case 'lead': {
+      // Highpass 300 Hz cuts mud, then a wide peaking EQ boosts vocal presence
+      const src = makeSource();
+      const hpf = offCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = 300;
+      hpf.Q.value = 0.7;
+      const peak = offCtx.createBiquadFilter();
+      peak.type = 'peaking';
+      peak.frequency.value = 2500;
+      peak.gain.value = 8;
+      peak.Q.value = 0.8;
+      src.connect(hpf);
+      hpf.connect(peak);
+      peak.connect(offCtx.destination);
+      src.start();
+      break;
+    }
+    case 'chords': {
+      // Mid-range bandpass: highpass 300 Hz then lowpass 3000 Hz
+      const src = makeSource();
+      const hpf = offCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = 300;
+      hpf.Q.value = 0.7;
+      const lpf = offCtx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 3000;
+      lpf.Q.value = 0.7;
+      src.connect(hpf);
+      hpf.connect(lpf);
+      lpf.connect(offCtx.destination);
+      src.start();
+      break;
+    }
+    case 'bass': {
+      // Lowpass 220 Hz — sub-bass and kick body
+      const src = makeSource();
+      const lpf = offCtx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 220;
+      lpf.Q.value = 1.0;
+      src.connect(lpf);
+      lpf.connect(offCtx.destination);
+      src.start();
+      break;
+    }
+    case 'drums': {
+      // Parallel mix: transients (highpass 3 kHz) + kick sub (lowpass 80 Hz)
+      const mix = offCtx.createGain();
+      mix.gain.value = 0.65;
+      mix.connect(offCtx.destination);
+
+      const srcHi = makeSource();
+      const hpf = offCtx.createBiquadFilter();
+      hpf.type = 'highpass';
+      hpf.frequency.value = 3000;
+      srcHi.connect(hpf);
+      hpf.connect(mix);
+      srcHi.start();
+
+      const srcLo = makeSource();
+      const lpf = offCtx.createBiquadFilter();
+      lpf.type = 'lowpass';
+      lpf.frequency.value = 80;
+      srcLo.connect(lpf);
+      lpf.connect(mix);
+      srcLo.start();
+      break;
+    }
+  }
+
+  return offCtx.startRendering();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MIDI note pitch-register filtering — ensures each stem's MIDI file contains
+// only the notes appropriate to its frequency band.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STEM_PITCH_RANGES: Record<UpperRowId, [min: number, max: number]> = {
+  lead:   [72, 127], // C5 and above — top-line melody
+  chords: [48, 71],  // C3–B4 — mid-range polyphony
+  bass:   [0,  48],  // C-1–C3 — sub-bass / bass lines
+  drums:  [0,  127], // all pitches — drums are transient, not pitch-filtered
+};
+
+function toMonophonicHighest(notes: MidiNote[]): MidiNote[] {
+  if (notes.length === 0) return [];
+  // Sort by start time ascending, then by pitch descending (highest first)
+  const sorted = [...notes].sort((a, b) =>
+    a.startTimeSec !== b.startTimeSec
+      ? a.startTimeSec - b.startTimeSec
+      : b.midiNumber - a.midiNumber,
+  );
+  const result: MidiNote[] = [];
+  for (const note of sorted) {
+    const conflictIdx = result.findIndex(
+      r => r.startTimeSec < note.startTimeSec + note.durationSec &&
+           r.startTimeSec + r.durationSec > note.startTimeSec,
+    );
+    if (conflictIdx === -1) {
+      result.push(note); // no overlap — add freely
+    } else if (result[conflictIdx].midiNumber < note.midiNumber) {
+      result.splice(conflictIdx, 1, note); // swap for higher pitch
+    }
+    // else: existing is already the highest — skip
+  }
+  return result;
+}
+
+function filterNotesByStem(notes: MidiNote[], stemId: UpperRowId): MidiNote[] {
+  const [minPitch, maxPitch] = STEM_PITCH_RANGES[stemId];
+  const filtered = notes.filter(n => n.midiNumber >= minPitch && n.midiNumber <= maxPitch);
+  return stemId === 'lead' ? toMonophonicHighest(filtered) : filtered;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Props
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -323,6 +462,34 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
     })();
     return () => { cancelled = true; };
   }, [audioFile]);
+
+  // ── DSP stem buffers: parallel OfflineAudioContext renders ────────────
+  // Populated once the master AudioBuffer is ready; each buffer is a
+  // band-filtered version of the original audio.
+  const [stemBuffers, setStemBuffers] = useState<Record<UpperRowId, AudioBuffer | null>>({
+    lead: null, chords: null, bass: null, drums: null,
+  });
+
+  useEffect(() => {
+    if (!decodedAudioBuffer) {
+      setStemBuffers({ lead: null, chords: null, bass: null, drums: null });
+      return;
+    }
+    let cancelled = false;
+    Promise.allSettled(
+      UPPER_ROWS.map(row => renderStemBuffer(decodedAudioBuffer, row.id)),
+    ).then(results => {
+      if (cancelled) return;
+      const next = { lead: null, chords: null, bass: null, drums: null } as Record<UpperRowId, AudioBuffer | null>;
+      for (let i = 0; i < UPPER_ROWS.length; i++) {
+        const r = results[i];
+        next[UPPER_ROWS[i].id] = r.status === 'fulfilled' ? r.value : null;
+      }
+      setStemBuffers(next);
+    }).catch(() => { /* ignore — rows will fall back to master audioFile */ });
+    return () => { cancelled = true; };
+  }, [decodedAudioBuffer]);
+
   const allTranscribedNotes = useMemo(
     () => Object.values(rowTranscriptions).flatMap(r => r?.notes ?? []),
     [rowTranscriptions],
@@ -386,11 +553,14 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
     const startOffset = playheadSec >= totalDurationSec ? 0 : playheadSec;
 
     if (decodedAudioBuffer) {
-      // ── Natural audio playback from the decoded buffer ──────────────────
+      // ── Natural audio playback ──────────────────────────────────────────
+      // When a track is soloed, play its isolated stem buffer so it sounds
+      // like the real band-filtered stem rather than the full mix.
+      const playBuffer = (upperSolo && stemBuffers[upperSolo]) ? stemBuffers[upperSolo]! : decodedAudioBuffer;
       const src = actx.createBufferSource();
-      src.buffer = decodedAudioBuffer;
+      src.buffer = playBuffer;
       src.connect(actx.destination);
-      src.start(0, startOffset);
+      src.start(0, Math.min(startOffset, playBuffer.duration - 0.01));
       sourceNodeRef.current = src;
       // onended fires when clip naturally reaches end
       src.onended = () => {
@@ -437,6 +607,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
     setAudioFile(file);
     setAudioIsAnalyzing(true);
     setRowTranscriptions({ lead: null, chords: null, bass: null, drums: null });
+    setStemBuffers({ lead: null, chords: null, bass: null, drums: null });
     setKeyOverride(null);
     setDecodedDurationSec(0);
     try {
@@ -462,6 +633,10 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
 
   const handleResetAll = () => {
     stopPlayback();
+    setStemBuffers({ lead: null, chords: null, bass: null, drums: null });
+    setRowTranscriptions({ lead: null, chords: null, bass: null, drums: null });
+    setDecodedDurationSec(0);
+    setPlayheadSec(0);
     eng.reset();
   };
 
@@ -510,11 +685,19 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
         stem: row.stem, timeSegment: 'full', audioFile, analysis,
         bpm: effectiveBpm, key: effectiveKey,
       });
-      setRowTranscriptions(prev => ({ ...prev, [row.id]: res }));
+
+      // Filter notes to this stem's assigned pitch register, then re-encode MIDI
+      const filteredNotes = filterNotesByStem(res.notes, row.id);
+      const filteredMidi = generateMidiFile(filteredNotes, row.label, effectiveBpm);
+      const stemResult: TranscriptionResult = { ...res, notes: filteredNotes, midiData: filteredMidi };
+
+      setRowTranscriptions(prev => ({ ...prev, [row.id]: stemResult }));
       if (res.autoSliced) {
         showToast(`Track exceeds 30s — auto-sliced to the first ${Math.round(res.effectiveDurationSec)}s to prevent memory exhaustion.`);
       }
-      showToast(`${row.label}: extracted ${res.notes.length} notes → "${row.label}.mid" ready to drag`);
+      const filtered = res.notes.length - filteredNotes.length;
+      const filterNote = filtered > 0 ? ` (${filtered} out-of-register notes removed)` : '';
+      showToast(`${row.label}: ${filteredNotes.length} notes extracted${filterNote} → "${row.label}.mid" ready to drag`);
     } catch (err) {
       if (err instanceof TranscriptionTimeoutError) {
         showToast('⏱ Transcription timed out. Please try a shorter audio loop or lower resolution.');
@@ -872,6 +1055,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                   <div className="flex-1 min-w-0 self-stretch min-h-[44px] py-1">
                     <WaveformCanvas
                       audioFile={audioFile}
+                      audioBuffer={stemBuffers[row.id]}
                       accentColor={row.color}
                       progressSec={playheadSec}
                       totalDurationSec={totalDurationSec}
@@ -1129,6 +1313,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                   <div className="flex-1 min-w-0 self-stretch min-h-[44px] py-1">
                     <WaveformCanvas
                       audioFile={audioFile}
+                      audioBuffer={stemBuffers[row.id as UpperRowId]}
                       accentColor={row.color}
                       progressSec={playheadSec}
                       totalDurationSec={totalDurationSec}
