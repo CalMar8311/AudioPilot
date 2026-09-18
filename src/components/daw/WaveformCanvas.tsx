@@ -2,7 +2,7 @@
 // colored bar waveform on <canvas>, with a synced playback scrubber line and
 // click-to-seek. Used by every track row in the Wingman dual-deck workspace.
 
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 
 interface WaveformCanvasProps {
   audioFile: File | null;
@@ -12,6 +12,10 @@ interface WaveformCanvasProps {
   progressSec: number;
   /** Total duration in seconds used to map progressSec → x position. */
   totalDurationSec: number;
+  /**
+   * Fixed canvas height in px. Pass 0 (or omit) to auto-fill the parent
+   * container's height via ResizeObserver — useful inside flex rows.
+   */
   heightPx?: number;
   /** Dims the waveform to indicate a muted / non-soloed track. */
   dimmed?: boolean;
@@ -29,7 +33,7 @@ export function WaveformCanvas({
   accentColor,
   progressSec,
   totalDurationSec,
-  heightPx = 56,
+  heightPx = 0,
   dimmed = false,
   onSeek,
   onDuration,
@@ -39,6 +43,23 @@ export function WaveformCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [peaks, setPeaks] = useState<Float32Array | null>(null);
   const [isDecoding, setIsDecoding] = useState(false);
+  // Measured container height used when heightPx === 0 (auto-fill mode).
+  const [measuredH, setMeasuredH] = useState(56);
+
+  // ── Auto-height: observe container size when heightPx === 0 ─────────────
+  useLayoutEffect(() => {
+    if (heightPx > 0) return; // fixed-height mode — nothing to observe
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const h = el.clientHeight;
+      if (h > 0) setMeasuredH(Math.round(h));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [heightPx]);
 
   // ── Decode audio → peak buckets (min/max amplitude per bucket) ───────────
   useEffect(() => {
@@ -94,7 +115,7 @@ export function WaveformCanvas({
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cssW = container.clientWidth || 480;
-    const cssH = heightPx;
+    const cssH = heightPx > 0 ? heightPx : measuredH;
 
     if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
       canvas.width = cssW * dpr;
@@ -167,7 +188,7 @@ export function WaveformCanvas({
     }
 
     ctx.restore();
-  }, [peaks, accentColor, progressSec, totalDurationSec, heightPx, dimmed, gridDivisions]);
+  }, [peaks, accentColor, progressSec, totalDurationSec, heightPx, measuredH, dimmed, gridDivisions]);
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     if (!onSeek || totalDurationSec <= 0) return;
@@ -181,8 +202,8 @@ export function WaveformCanvas({
     <div
       ref={containerRef}
       onClick={handleClick}
-      className={`relative w-full rounded-lg overflow-hidden border border-ink-800/60 ${onSeek ? 'cursor-pointer' : ''}`}
-      style={{ height: heightPx }}
+      className={`relative w-full rounded-lg overflow-hidden border border-ink-800/60${heightPx === 0 ? ' h-full' : ''}${onSeek ? ' cursor-pointer' : ''}`}
+      style={heightPx > 0 ? { height: heightPx } : undefined}
     >
       <canvas ref={canvasRef} className="block" style={{ imageRendering: 'pixelated' }} />
       {isDecoding && (

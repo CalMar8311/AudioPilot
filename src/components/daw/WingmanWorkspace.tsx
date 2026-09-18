@@ -558,33 +558,33 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
   return (
     <div className="flex-1 h-full max-h-full overflow-hidden relative min-w-0 flex flex-col">
       {/* ══════════════ 1. GLOBAL HEADER BAR ══════════════ */}
-      <header className="h-16 shrink-0 flex items-center gap-2.5 px-4 border-b border-dock-border bg-dock-rail overflow-x-auto">
+      <header className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-white/5 bg-dock-rail overflow-x-auto">
         {/* Logo badge */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-neon-cyan/25 to-neon-magenta/25 border border-ink-600 flex items-center justify-center shadow-[0_0_10px_rgba(6,182,212,0.25)]">
-            <Disc3 className="w-4 h-4 text-neon-cyan" />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-neon-cyan/25 to-neon-magenta/25 border border-ink-600 flex items-center justify-center shadow-[0_0_10px_rgba(6,182,212,0.25)]">
+            <Disc3 className="w-3.5 h-3.5 text-neon-cyan" />
           </div>
-          <span className="text-[13px] font-black tracking-wide bg-gradient-to-r from-cyan-300 to-fuchsia-300 bg-clip-text text-transparent hidden md:inline">
+          <span className="text-[12px] font-black tracking-wide bg-gradient-to-r from-cyan-300 to-fuchsia-300 bg-clip-text text-transparent hidden md:inline">
             AudioPilot
           </span>
         </div>
 
-        <div className="w-px h-6 bg-dock-border shrink-0" />
+        <div className="w-px h-5 bg-dock-border shrink-0" />
 
         {/* Record + Upload / Folder */}
-        <div className="flex items-center gap-2 shrink-0 relative">
+        <div className="flex items-center gap-1.5 shrink-0 relative">
           <div className="relative">
             <button
               type="button"
               onClick={() => (recorder.isRecording ? void handleStopRecording() : setRecordMenuOpen(o => !o))}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold whitespace-nowrap transition ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold whitespace-nowrap transition ${
                 recorder.isRecording
                   ? 'border-red-500 bg-red-500/15 text-red-300'
                   : 'border-dock-border bg-dock-bg text-ink-300 hover:border-red-500/40'
               }`}
             >
-              <Circle className={`w-2.5 h-2.5 ${recorder.isRecording ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/70 text-red-500/70'}`} />
-              {recorder.isRecording ? `${fmtTime(recorder.recordingTime)} · Stop` : 'Record Audio'}
+              <Circle className={`w-2 h-2 ${recorder.isRecording ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/70 text-red-500/70'}`} />
+              {recorder.isRecording ? `${fmtTime(recorder.recordingTime)} · Stop` : 'Record'}
             </button>
             {recordMenuOpen && !recorder.isRecording && (
               <div className="absolute left-0 top-full mt-1.5 w-52 rounded-xl border border-dock-border bg-dock-card shadow-2xl z-30 p-1.5">
@@ -616,60 +616,60 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dock-border bg-dock-bg text-[11px] font-semibold text-ink-300 hover:border-neon-cyan/40 transition whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-dock-border bg-dock-bg text-[10px] font-semibold text-ink-300 hover:border-neon-cyan/40 transition whitespace-nowrap"
           >
-            <Upload className="w-3.5 h-3.5" /> Upload
+            <Upload className="w-3 h-3" /> Upload
           </button>
           <button
             type="button"
             onClick={() => setFolderOpen(o => !o)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-semibold transition whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-semibold transition whitespace-nowrap ${
               folderOpen ? 'border-neon-cyan/50 bg-neon-cyan/10 text-neon-cyan' : 'border-dock-border bg-dock-bg text-ink-300 hover:border-neon-cyan/40'
             }`}
           >
-            <FolderOpen className="w-3.5 h-3.5" /> Folder
+            <FolderOpen className="w-3 h-3" /> Folder
           </button>
         </div>
 
         {/* Key + BPM (center) */}
-        <div className="flex items-center gap-2 mx-auto shrink-0">
+        <div className="flex items-center gap-1.5 mx-auto shrink-0">
           <div className="relative">
             <select
               value={effectiveKey}
               onChange={e => setKeyOverride(e.target.value)}
-              className="appearance-none bg-dock-bg border border-dock-border rounded-full pl-3 pr-7 py-1.5 text-[11px] font-semibold text-ink-200 focus:outline-none focus:border-neon-cyan/50 cursor-pointer"
+              className="appearance-none bg-dock-bg border border-dock-border rounded-full pl-2.5 pr-6 py-1 text-[10px] font-semibold text-ink-200 focus:outline-none focus:border-neon-cyan/50 cursor-pointer"
             >
               {KEY_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
             </select>
-            <ChevronDown className="w-3 h-3 text-ink-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <ChevronDown className="w-2.5 h-2.5 text-ink-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
-          <span className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-dock-border bg-dock-bg text-[11px] font-mono font-bold text-neon-cyan whitespace-nowrap">
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-dock-border bg-dock-bg text-[10px] font-mono font-bold text-neon-cyan whitespace-nowrap">
             {effectiveBpm} BPM
           </span>
         </div>
 
         {/* Transport */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={handleTogglePlay}
             title={isPlaying ? 'Pause' : 'Play'}
-            className="w-8 h-8 rounded-full flex items-center justify-center border border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 transition shrink-0"
+            className="w-7 h-7 rounded-full flex items-center justify-center border border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 transition shrink-0"
           >
-            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+            {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 ml-0.5" />}
           </button>
           <button
             type="button"
             onClick={handleStop}
             title="Stop"
-            className="w-8 h-8 rounded-full flex items-center justify-center border border-dock-border bg-dock-bg text-ink-400 hover:text-ink-200 transition shrink-0"
+            className="w-7 h-7 rounded-full flex items-center justify-center border border-dock-border bg-dock-bg text-ink-400 hover:text-ink-200 transition shrink-0"
           >
-            <Square className="w-3 h-3" />
+            <Square className="w-2.5 h-2.5" />
           </button>
-          <span className="text-[10px] font-mono text-ink-500 w-14 text-right shrink-0">{fmtTime(playheadSec)}</span>
+          <span className="text-[10px] font-mono text-ink-500 w-12 text-right shrink-0">{fmtTime(playheadSec)}</span>
         </div>
 
-        <div className="w-px h-6 bg-dock-border shrink-0" />
+        <div className="w-px h-5 bg-dock-border shrink-0" />
 
         {/* Reset + Settings */}
         <div className="flex items-center gap-1 shrink-0">
@@ -677,24 +677,24 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
             type="button"
             onClick={handleResetAll}
             title="Reset All"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-500 hover:text-red-400 hover:bg-red-500/10 transition"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-500 hover:text-red-400 hover:bg-red-500/10 transition"
           >
-            <XIcon className="w-4 h-4" />
+            <XIcon className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
             onClick={onOpenSettings}
             title="Settings"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-500 hover:text-ink-200 hover:bg-dock-hover transition"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-ink-500 hover:text-ink-200 hover:bg-dock-hover transition"
           >
-            <Settings className="w-4 h-4" />
+            <Settings className="w-3.5 h-3.5" />
           </button>
         </div>
       </header>
 
       {/* Folder browser — absolute overlay so it never eats into the fixed deck heights */}
       {folderOpen && (
-        <div className="absolute top-16 left-0 right-0 z-30 border-b border-dock-border bg-dock-surface max-h-72 overflow-y-auto shadow-2xl">
+        <div className="absolute top-12 left-0 right-0 z-30 border-b border-white/5 bg-dock-surface max-h-72 overflow-y-auto shadow-2xl">
           <FolderPlaylistBrowser
             onSendToAnalyzer={(f) => { void processAudioFile(f); setFolderOpen(false); }}
             onShowToast={showToast}
@@ -703,16 +703,16 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
       )}
 
       {/* ══════════════ Deck stack — fills remaining viewport, no page-level scroll ══════════════ */}
-      <div className="flex-1 min-h-0 flex flex-col gap-3 px-4 py-3 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col gap-2 px-3 py-2 overflow-hidden">
 
-        {/* ══════════════ 2. UPPER DECK — Input (~45% height) ══════════════ */}
-        <section className="flex-1 min-h-0 flex flex-col rounded-2xl bg-dock-card border border-dock-border shadow-panel overflow-hidden">
+        {/* ══════════════ 2. UPPER DECK — Input (~48% height) ══════════════ */}
+        <section className="flex-1 min-h-0 flex flex-col rounded-xl bg-dock-card border border-white/5 shadow-panel overflow-hidden">
           {/* Section header — mirrors the 3-column row structure for alignment */}
-          <div className="shrink-0 flex items-center gap-3 px-4 py-1.5 border-b border-dock-border bg-dock-hover/30">
-            {/* Left zone — matches w-40 track-control column */}
-            <div className="w-40 shrink-0 flex items-center gap-1.5">
-              <Waves className="w-3.5 h-3.5 text-neon-cyan" />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-ink-300">Input</span>
+          <div className="shrink-0 flex items-center gap-3 px-3 py-1 border-b border-white/5 bg-dock-hover/20">
+            {/* Left zone — matches w-36 track-control column */}
+            <div className="w-36 shrink-0 flex items-center gap-1.5">
+              <Waves className="w-3 h-3 text-neon-cyan" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-ink-300">Input</span>
               {!audioFile && <span className="text-[9px] text-ink-500 italic ml-1">· drop audio</span>}
             </div>
             {/* Center zone — bar ruler aligned with waveform column */}
@@ -721,8 +721,8 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                 <span key={i} className="flex-1 text-center text-[9px] text-ink-600 font-mono">{i + 1}</span>
               ))}
             </div>
-            {/* Right zone — column headers matching w-72 export panel */}
-            <div className="w-72 shrink-0 flex items-center">
+            {/* Right zone — column headers matching w-52 export panel */}
+            <div className="w-52 shrink-0 flex items-center">
               <span className="flex-1 text-center text-[9px] font-bold uppercase tracking-widest text-ink-500">Export stem</span>
               <span className="flex-1 text-center text-[9px] font-bold uppercase tracking-widest text-ink-500">Convert to MIDI</span>
             </div>
@@ -735,12 +735,12 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
               const dimmed = upperSolo !== null ? !isSolo : isMuted;
               const transcription = rowTranscriptions[row.id];
               return (
-                <div key={row.id} className="flex-1 min-h-16 max-h-24 flex items-center gap-3 border-b border-dock-border/60 last:border-b-0">
+                <div key={row.id} className="flex-1 min-h-[52px] flex items-stretch gap-2 border-b border-white/5 last:border-b-0">
                   {/* Left: label + controls */}
-                  <div className="w-40 shrink-0 flex flex-col gap-1.5 pr-2">
+                  <div className="w-36 shrink-0 flex flex-col gap-0.5 justify-center pr-1 pl-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
-                      <span className="text-[11px] font-bold truncate" style={{ color: row.color }}>{row.label}</span>
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: row.color }} />
+                      <span className="text-[10px] font-bold truncate" style={{ color: row.color }}>{row.label}</span>
                     </div>
                     <TrackControlCluster
                       color={row.color}
@@ -753,14 +753,13 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                     />
                   </div>
 
-                  {/* Center: waveform (with subtle grid lines — reads as a ready DAW channel even empty) */}
-                  <div className="flex-1 min-w-0">
+                  {/* Center: waveform — self-stretch so it fills the full row height */}
+                  <div className="flex-1 min-w-0 self-stretch min-h-[44px] py-1">
                     <WaveformCanvas
                       audioFile={audioFile}
                       accentColor={row.color}
                       progressSec={playheadSec}
                       totalDurationSec={totalDurationSec}
-                      heightPx={44}
                       gridDivisions={8}
                       dimmed={dimmed}
                       onSeek={handleSeek}
@@ -769,7 +768,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                   </div>
 
                   {/* Right: side-by-side Export Stem | Convert to MIDI cards (matching column headers) */}
-                  <div className="w-72 shrink-0 flex gap-2 items-center">
+                  <div className="w-52 shrink-0 flex gap-1.5 items-stretch py-1 pr-1">
                     <div className="flex-1 min-w-0">
                       <ExportStemCard row={row} disabled={!audioFile} onExport={() => handleExportStemAudio(row)} />
                     </div>
@@ -792,36 +791,36 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
           </div>
         </section>
 
-        {/* ══════════════ 3. MIDDLE REHARMONIZATION BAR (fixed h-12) ══════════════ */}
-        <section className="h-12 shrink-0 rounded-2xl bg-dock-card border border-dock-border shadow-panel px-4 flex items-center gap-3 overflow-x-auto">
+        {/* ══════════════ 3. MIDDLE REHARMONIZATION BAR (fixed h-10) ══════════════ */}
+        <section className="h-10 shrink-0 rounded-xl bg-dock-card border border-white/5 shadow-panel px-3 flex items-center gap-2 overflow-x-auto">
           {/* Source selector */}
-          <div className="flex items-center gap-1.5 text-[11px] text-ink-400 shrink-0">
+          <div className="flex items-center gap-1 text-[10px] text-ink-400 shrink-0">
             <span>Using</span>
             <select
               value={reharmSource}
               onChange={e => setReharmSource(e.target.value as 'lead' | 'chords')}
-              className="bg-dock-bg border border-dock-border rounded-md px-2 py-1 text-[11px] text-ink-200 focus:outline-none focus:border-neon-cyan/50"
+              className="bg-dock-bg border border-dock-border rounded-md px-1.5 py-0.5 text-[10px] text-ink-200 focus:outline-none focus:border-neon-cyan/50"
             >
-              <option value="lead">Vocals / Lead melody</option>
-              <option value="chords">Instruments / Chords</option>
+              <option value="lead">Vocals / Lead</option>
+              <option value="chords">Instruments</option>
             </select>
           </div>
 
           {/* Center stepper — cycles the 4 named 8-bar presets driving the Lower Deck timeline */}
-          <div className="flex-1 flex items-center justify-center gap-3 min-w-[220px]">
+          <div className="flex-1 flex items-center justify-center gap-2 min-w-[200px]">
             <button
               type="button"
               onClick={() => cyclePreset(-1)}
               title="Previous progression"
-              className="p-1.5 rounded-lg text-ink-400 hover:text-neon-cyan hover:bg-dock-hover transition shrink-0"
+              className="p-1 rounded-lg text-ink-400 hover:text-neon-cyan hover:bg-dock-hover transition shrink-0"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <div className="flex flex-col items-center min-w-[200px] text-center">
-              <span className="text-[12px] font-bold text-neon-magenta whitespace-nowrap">
+            <div className="flex flex-col items-center min-w-[180px] text-center">
+              <span className="text-[11px] font-bold text-neon-magenta whitespace-nowrap">
                 Chord progression {presetIndex + 1}
               </span>
-              <span className="text-[10px] text-ink-500 font-mono whitespace-nowrap">
+              <span className="text-[9px] text-ink-500 font-mono whitespace-nowrap">
                 {activePreset.label} — {activePreset.blocks.map(b => b.romanNumeral).join(' · ')}
               </span>
             </div>
@@ -829,9 +828,9 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
               type="button"
               onClick={() => cyclePreset(1)}
               title="Next progression"
-              className="p-1.5 rounded-lg text-ink-400 hover:text-neon-cyan hover:bg-dock-hover transition shrink-0"
+              className="p-1 rounded-lg text-ink-400 hover:text-neon-cyan hover:bg-dock-hover transition shrink-0"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -840,10 +839,10 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
             <button
               type="button"
               onClick={() => setAdvancedOpen(o => !o)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dock-border bg-dock-bg text-[11px] text-ink-300 hover:border-neon-cyan/40 transition"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-dock-border bg-dock-bg text-[10px] text-ink-300 hover:border-neon-cyan/40 transition"
             >
-              <Sparkles className="w-3.5 h-3.5 text-neon-cyan" /> Advanced
-              <ChevronDown className={`w-3 h-3 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+              <Sparkles className="w-3 h-3 text-neon-cyan" /> Advanced
+              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
             </button>
             {advancedOpen && (
               <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-dock-border bg-dock-card shadow-2xl z-30 p-3 flex flex-col gap-2 max-h-[70vh] overflow-y-auto">
@@ -875,19 +874,19 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
           </div>
         </section>
 
-        {/* ══════════════ 4. LOWER DECK — Harmonic Arrangement (~45% height) ══════════════ */}
-        <section className="flex-1 min-h-0 flex flex-col rounded-2xl bg-dock-card border border-dock-border shadow-panel overflow-hidden">
+        {/* ══════════════ 4. LOWER DECK — Harmonic Arrangement (~48% height) ══════════════ */}
+        <section className="flex-1 min-h-0 flex flex-col rounded-xl bg-dock-card border border-white/5 shadow-panel overflow-hidden">
           {/* Section header — mirrors lower-deck row structure for Export column alignment */}
-          <div className="shrink-0 flex items-center gap-3 px-4 py-1.5 border-b border-dock-border bg-dock-hover/30">
-            {/* Left zone — matches w-44 track-control column */}
-            <div className="w-44 shrink-0 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-neon-magenta" />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-ink-300">Harmonic</span>
+          <div className="shrink-0 flex items-center gap-3 px-3 py-1 border-b border-white/5 bg-dock-hover/20">
+            {/* Left zone — matches w-36 track-control column */}
+            <div className="w-36 shrink-0 flex items-center gap-1.5">
+              <Layers className="w-3 h-3 text-neon-magenta" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-ink-300">Harmonic</span>
             </div>
             {/* Center zone — bar ruler aligned with waveform column */}
             <div className="flex-1 min-w-0" />
             {/* Right zone — column headers for draggable export cards */}
-            <div className="w-[130px] shrink-0 flex items-center">
+            <div className="w-[100px] shrink-0 flex items-center">
               <div
                 draggable={!!audioFileBlobUrl}
                 onDragStart={e => beginNativeDrag(e, wavFilename, audioFileBlobUrl, 'audio/wav')}
@@ -914,28 +913,28 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
           </div>
 
           {/* 8-bar Roman-numeral chord timeline — driven by the middle bar's preset stepper */}
-          <div className="shrink-0 border-b border-dock-border/60">
+          <div className="shrink-0 border-b border-white/5">
             {/* Bar ruler — spans only the waveform column, aligned with upper deck ruler */}
-            <div className="flex px-4 pt-1.5 gap-3">
-              {/* Left spacer matching w-44 track-control column */}
-              <div className="w-44 shrink-0" />
+            <div className="flex px-3 pt-1 gap-2">
+              {/* Left spacer matching w-36 track-control column */}
+              <div className="w-36 shrink-0" />
               {/* Center ruler — flex-1 same as waveform column */}
               <div className="flex-1 flex">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <span key={i} className="flex-1 text-center text-[9px] text-ink-600 font-mono">{i + 1}</span>
                 ))}
               </div>
-              {/* Right spacer matching w-[130px] export column */}
-              <div className="w-[130px] shrink-0" />
+              {/* Right spacer matching w-[100px] export column */}
+              <div className="w-[100px] shrink-0" />
             </div>
             {/* Full-width chord blocks row */}
-            <div className="flex px-4 pb-1.5 pt-0.5 gap-3">
+            <div className="flex px-3 pb-1 pt-0 gap-2">
               {/* Left spacer */}
-              <div className="w-44 shrink-0 flex items-end pb-0.5">
+              <div className="w-36 shrink-0 flex items-end pb-0.5">
                 <span className="text-[8px] text-ink-600 font-mono truncate">{activePreset.label}</span>
               </div>
               {/* Chord blocks — edge-to-edge across flex-1, matching waveform width */}
-              <div className="flex-1 relative flex h-[72px]">
+              <div className="flex-1 relative flex h-[56px]">
                 {activePreset.blocks.map((block, i) => {
                   const span = block.bars[1] - block.bars[0] + 1;
                   const color = REHARM_BLOCK_COLORS[i % REHARM_BLOCK_COLORS.length];
@@ -947,7 +946,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                     <div
                       key={i}
                       title={`Bars ${barsLabel}: ${block.romanNumeral} (${chordName})`}
-                      className={`flex flex-col items-center justify-center gap-0.5 border-t-[4px] min-w-0 ${
+                      className={`flex flex-col items-center justify-center gap-0.5 border-t-[3px] min-w-0 ${
                         isFirst ? 'rounded-tl-md rounded-bl-md' : ''} ${isLast ? 'rounded-tr-md rounded-br-md' : ''
                       }`}
                       style={{
@@ -957,10 +956,10 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                         borderLeft: i > 0 ? `1px solid rgba(255,255,255,0.06)` : 'none',
                       }}
                     >
-                      <span className="text-[17px] font-black leading-none truncate max-w-full px-1.5" style={{ color }}>
+                      <span className="text-[15px] font-black leading-none truncate max-w-full px-1" style={{ color }}>
                         {block.romanNumeral}
                       </span>
-                      <span className="text-[11px] text-ink-200 font-mono font-semibold leading-none mt-0.5">{chordName}</span>
+                      <span className="text-[10px] text-ink-200 font-mono font-semibold leading-none mt-0.5">{chordName}</span>
                     </div>
                   );
                 })}
@@ -971,7 +970,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                 />
               </div>
               {/* Right spacer */}
-              <div className="w-[130px] shrink-0" />
+              <div className="w-[100px] shrink-0" />
             </div>
           </div>
 
@@ -982,13 +981,13 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
               const isMuted = lowerMuted.has(row.id);
               const dimmed = lowerSolo !== null ? !isSolo : isMuted;
               return (
-                <div key={row.id} className="flex-1 min-h-14 max-h-24 flex items-center gap-3 px-4 border-b border-dock-border/60 last:border-b-0">
-                  {/* Left: colored pill label + S/M/knob — w-44 matching lower-deck chord block left spacer */}
-                  <div className="w-44 shrink-0 flex items-center gap-1.5">
+                <div key={row.id} className="flex-1 min-h-[52px] flex items-stretch gap-2 px-3 border-b border-white/5 last:border-b-0">
+                  {/* Left: colored pill label + S/M/knob — w-36 matching lower-deck chord block left spacer */}
+                  <div className="w-36 shrink-0 flex items-center gap-1.5 py-1">
                     <button
                       type="button"
                       title={row.label}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap"
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap"
                       style={{
                         backgroundColor: `${row.color}22`,
                         border: `1px solid ${row.color}55`,
@@ -996,7 +995,7 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                       }}
                     >
                       {row.label.split('/')[0].trim()}
-                      <ChevronDown className="w-3 h-3 opacity-70" />
+                      <ChevronDown className="w-2.5 h-2.5 opacity-70" />
                     </button>
                     <TrackControlCluster
                       color={row.color}
@@ -1009,22 +1008,21 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
                     />
                   </div>
 
-                  {/* Center: waveform — same audio source, this stem's accent color */}
-                  <div className="flex-1 min-w-0">
+                  {/* Center: waveform — self-stretch to fill full row height */}
+                  <div className="flex-1 min-w-0 self-stretch min-h-[44px] py-1">
                     <WaveformCanvas
                       audioFile={audioFile}
                       accentColor={row.color}
                       progressSec={playheadSec}
                       totalDurationSec={totalDurationSec}
-                      heightPx={44}
                       gridDivisions={8}
                       dimmed={dimmed}
                       onSeek={handleSeek}
                     />
                   </div>
 
-                  {/* Right: mini WAV + MIDI export thumbnail cards — w-[130px] matching header columns */}
-                  <div className="w-[130px] shrink-0 flex gap-1.5 items-center h-full py-1.5">
+                  {/* Right: mini WAV + MIDI export thumbnail cards — w-[100px] matching header columns */}
+                  <div className="w-[100px] shrink-0 flex gap-1 items-stretch py-1 pr-1">
                     {/* WAV mini card */}
                     <div
                       draggable={!!audioFileBlobUrl}
