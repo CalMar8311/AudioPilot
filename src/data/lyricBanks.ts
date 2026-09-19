@@ -591,8 +591,201 @@ export type NarrativeTheme = {
 
 export const NARRATIVE_THEMES: NarrativeTheme[] = [
   {
-    id: 'cyberpunk-odyssey',
-    title: 'Late-Night Cyberpunk Odyssey',
+    id: 'melodic-pain-survivor-guilt',
+    title: 'Melodic Pain & Survivor Guilt',
+    category: 'Trap & Melodic Drill',
+    description: 'Trauma behind the check: unreturned calls, court dates, trust issues, and the people who did not make it out with you.',
+    promptTheme:
+      'Melodic Pain & Survivor Guilt. The bag came in but the group chat went quiet. Unreturned calls, a court date on the lock screen at 4:18 AM, DND still on, bank app refresh that does not fix who you lost. Conversational Rap/R&B, no poetry language.',
+    slang: ['on DND', 'left on read', 'the bag', 'group chat', 'court date', 'trust issues', 'I made it out'],
+    cadenceRules: 'Strained melodic rap on the hook, tighter pocket in the verse, ad-libs (yeah) (look) (uh) every 4–8 bars.',
+    personaTags: ['[Vocal switch: strained melodic rap]', '[Close-mic confession]', '(yeah)', '(look)'],
+    deliveryDirectives: ['[Ad-lib: yeah]', '[Vocal switch: strained melodic rap]', '[Whispered]'],
+    regionalFlows: ['Southern / Dirty South / Trap'],
+    sampleLyrics: `[Intro]
+Phone on DND since Tuesday (look)
+Court date sitting in the banner at 4:18 AM
+
+[Verse 1]
+I hit you twice, you let it ring out (yeah)
+Lobby camera caught me pulling in alone
+Bank app say the wire cleared, I still feel broke
+I made it out and now the group chat dry
+
+[Chorus]
+[Vocal switch: strained melodic rap]
+I got the bag and I still can't sleep
+You left me on read like I don't bleed
+If I call your mama, what she gon' tell me?
+I survived it, that don't mean I'm free (uh)
+
+[Verse 2]
+Lawyer in my notes app, trust issues in my chest
+Same block, different car, same unfinished text
+I keep the console quiet so I hear my own breath
+You not here and that check don't cover it
+
+[Outro]
+(yeah) leave it on DND
+(look) I still see your name`,
+  },
+  {
+    id: 'toxic-situationship-read-receipts',
+    title: 'Toxic Situationship & Read Receipts',
+    category: 'Modern R&B / Toxic Soul',
+    description: 'Late replies, casual detachment, mixed signals, private stories, and the receipt you screenshot then delete.',
+    promptTheme:
+      'Toxic Situationship & Read Receipts. Seen at 2:07, replied at 11:41. Private story views, car console glow, apartment lobby small talk that is not small. Mixed signals, no poetry, current R&B conversation.',
+    slang: ['read receipts', 'private story', 'mixed signals', 'situationship', 'left on seen', 'soft launch'],
+    cadenceRules: 'Breathy verse, stacked hook, talk-sing asides. Drop (uh) and (yeah) on offbeats.',
+    personaTags: ['[Smooth R&B — Intimate Delivery]', '[Vocal switch: talk-sing]', '(uh)', '(yeah)'],
+    deliveryDirectives: ['[Ad-lib: yeah]', '[Harmonies]', '[Falsetto]'],
+    regionalFlows: ['West Coast G-Funk'],
+    sampleLyrics: `[Intro]
+Read receipt, 2:07 (uh)
+You watched the private story, didn't say a thing
+
+[Verse 1]
+I seen you typing then you stopped (yeah)
+Lobby light hit your name on my lock
+You said we casual, then you called at 11:41
+I parked and sat in the console glow like a fool
+
+[Chorus]
+[Vocal switch: talk-sing]
+Don't text me "that was fun" if you still in my face
+Don't leave me on seen then pull up late
+If it's nothing, why you saving all my posts?
+This situationship got me checking my phone
+
+[Verse 2]
+Mixed signals in the thread, heart on airplane
+You soft-launch everybody but you hide my name
+I screenshot the receipt then I delete it
+I already know, I just wanted you to say it
+
+[Outro]
+(yeah) leave the read receipts on
+I already seen enough`,
+  },
+  {
+    id: 'corporate-hustle-high-tier',
+    title: 'Corporate Hustle & High-Tier Staking',
+    category: 'High-Rollers / Club Bounce',
+    description: 'Wire confirmations, NDAs, outgrowing neighborhood peers, quiet leverage, and money that does not announce itself.',
+    promptTheme:
+      'Corporate Hustle & High-Tier Staking. Wire confirmation at 9:12, NDA in the files app, same lobby as people who still want the old you. Quiet leverage, no flex poetry, Billboard rap talk.',
+    slang: ['wire hit', 'NDA', 'quiet luxury', 'outgrew', 'leverage', 'LLC', 'they still at the crib'],
+    cadenceRules: 'Even, unhurried flex. Short bars, dry punchlines, (look) before the money line.',
+    personaTags: ['[Punchy Fast Cadence - Male Rap]', '(look)', '(yeah)', '[Ad-lib: uh]'],
+    deliveryDirectives: ['[Ad-lib: yeah]', '[Belting]'],
+    regionalFlows: ['90s East Coast / Boom Bap'],
+    sampleLyrics: `[Intro]
+(look) wire confirmation just hit
+NDA in the files, I don't talk numbers
+
+[Verse 1]
+They still at the crib asking what I do now
+I say "meetings" like that cover the LLC
+Same lobby, different badge, I keep it short
+I outgrew the group and I still love 'em (yeah)
+
+[Chorus]
+I don't post the bag, I move the bag
+Quiet leverage, that's the only flex I have
+If the wire clear, I don't need a crowd
+High-tier staking, keep the volume down (uh)
+
+[Verse 2]
+Flight confirmation in my email, 6:40
+Car console on low, I don't narrate the come-up
+They want the old stories, I give 'em the calendar
+If it ain't in writing, it ain't happening
+
+[Outro]
+(look) keep it between the app and me`,
+  },
+  {
+    id: 'gospel-trap-redemption',
+    title: 'Gospel Trap / Redemption',
+    category: 'Soul Sample / Gospel Trap',
+    description: 'Prayers over trap drums, generational wealth, breaking family cycles, tithes and trials in the same week.',
+    promptTheme:
+      'Gospel Trap / Redemption. Prayer in the car before the session, tithe on the bank app, mama court date and a new LLC in the same month. Testimony over 808s, conversational, no church-play language.',
+    slang: ['tithe', 'trial', 'generational', 'break the cycle', 'on my knees', 'the 808', 'blessing with a receipt'],
+    cadenceRules: 'Testimony verse, choir-stacked hook, (yeah) as amen. Switch to strained melodic rap on the last eight.',
+    personaTags: ['[Soulful Gospel Tenor - Melodic Runs]', '[Vocal switch: strained melodic rap]', '(yeah)', '(look)'],
+    deliveryDirectives: ['[Ad-lib: yeah]', '[Harmonies]', '[Vocal switch: strained melodic rap]'],
+    regionalFlows: ['Southern / Dirty South / Trap'],
+    sampleLyrics: `[Intro]
+[Gospel Choir Intro]
+I said a prayer in the driver seat (yeah)
+Tithe left the bank app before the weekend
+
+[Verse 1]
+Mama got a court date, I got a session
+I told God I need both of us to make it
+I used to spend it fast, now I file the LLC
+Break the cycle or I become the cycle (look)
+
+[Chorus]
+[Vocal switch: strained melodic rap]
+I'm still in trial but the blessing hit
+I put ten percent where the rent used to sit
+If I make it out, we all eating off this
+Don't clap yet — we still in the thick
+
+[Verse 2]
+Generational talk in a two-bedroom
+I keep the 808 low so I hear myself think
+I ain't clean, I'm just honest this week
+Receipts in the drawer next to the Bible
+
+[Outro]
+(yeah) keep me humble
+(look) keep me paid`,
+  },
+  {
+    id: 'west-coast-bounce-summer',
+    title: 'West Coast Bounce / Summer Function',
+    category: 'High-Rollers / Club Bounce',
+    description: 'Windows down, petty talk, distinct street etiquette, low-stress flex, function energy without tourist language.',
+    promptTheme:
+      'West Coast Bounce / Summer Function. Windows cracked, aux in the console, petty talk in the group chat, street etiquette: speak when spoken to. Low-stress flex, current slang, no tourist poetry.',
+    slang: ['function', 'windows down', 'petty', 'aux', 'the block', 'keep it cool', 'slide through'],
+    cadenceRules: 'Laid-back bounce, elongated vowels, (uh) on the snare, talk-sing hooks.',
+    personaTags: ['[West Coast Bounce]', '(uh)', '(yeah)', '[Ad-lib: look]'],
+    deliveryDirectives: ['[Ad-lib: yeah]', '[Off-beat phrasing]'],
+    regionalFlows: ['West Coast G-Funk'],
+    sampleLyrics: `[Intro]
+Windows cracked, aux in the console (uh)
+If you slide, you already know the rules
+
+[Verse 1]
+Petty in the group chat, I'm still pulling up
+Don't speak on nobody you can't pull up on
+I keep it cool, I don't perform the block
+Function start at 4, I get there when I get there (yeah)
+
+[Chorus]
+Windows down, I ain't in a rush
+If you talking loud, you not with us
+Low-stress flex, I let the car talk
+Summer function, we don't do too much (look)
+
+[Verse 2]
+Street etiquette: you speak, I speak
+You reach, I don't reach back twice
+Phone on DND till the lot fill up
+I got one charger and a cooler in the back
+
+[Outro]
+(uh) keep it moving
+(yeah) that's the function`,
+  },
+];
+
+export const RHYME_KEYS_PLACEHOLDER_DO_NOT_USE = [
     category: 'Sci-Fi / Dystopian',
     description: 'High-tech dystopia, neon rain on wet pavement, digital ghosts, escaping the grid.',
     promptTheme: 'Late-Night Cyberpunk Odyssey, neon rain, wet pavement reflections, digital ghosts, escaping the system',
