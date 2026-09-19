@@ -41,63 +41,63 @@ interface Archetype {
 
 const ARCHETYPES: Archetype[] = [
   {
-    id: 'midnight-confession',
-    name: 'The Midnight Confession',
-    tagline: 'Unsaid words, a late-night call, pride slipping away',
+    id: 'survivor-guilt',
+    name: 'Melodic Pain & Survivor Guilt',
+    tagline: 'The bag came in, the group chat went quiet',
     situation:
-      'The singer has been awake since 2 AM, phone in hand, rehearsing a message they can\'t bring themselves to send. The city is quiet except for the hum of a refrigerator and the distant sound of rain.',
+      'Phone on DND since Tuesday. A court date sits in the lock-screen banner at 4:18 AM. The wire cleared and the people who used to ride still have not called back.',
     emotionalStake:
-      'This is the last night before everything becomes permanent — one honest sentence could rewrite everything.',
+      'Making it out did not bring anybody with you, and the check does not cover the ones you lost.',
     vibes: ['Late Night', 'Heartbreak', 'Intimacy'],
   },
   {
-    id: 'unsent-letter',
-    name: 'The Unsent Letter',
-    tagline: 'Bittersweet closure, things left unaddressed, moving on',
+    id: 'read-receipts',
+    name: 'Toxic Situationship & Read Receipts',
+    tagline: 'Seen at 2:07, replied at 11:41',
     situation:
-      'Packing the last box in an apartment that no longer feels like home, the singer finds a handwritten letter they never mailed. The envelope is still sealed.',
+      'They watched the private story, left the thread on seen, then called from the apartment lobby like nothing happened. The car console is the only light on.',
     emotionalStake:
-      'Every line they wrote a year ago still rings true — but sending it now would be an act of war or an act of grace, and they\'re not sure which.',
-    vibes: ['Nostalgia', 'Heartbreak', 'Intimacy'],
+      'You already have the receipt. You just want them to say it out loud.',
+    vibes: ['Heartbreak', 'Intimacy', 'Nostalgia'],
   },
   {
-    id: 'underdog-ascent',
-    name: 'The Underdog Ascent',
-    tagline: 'Relentless grind, proving doubters wrong, scars as badges',
+    id: 'quiet-leverage',
+    name: 'Corporate Hustle & High-Tier Staking',
+    tagline: 'Wire confirmation, NDA, no caption',
     situation:
-      'Three years of sleeping on a studio couch, skipping meals, and watching lesser talents get co-signed. The singer is about to step on the biggest stage of their life — still wearing the same chain from a pawn shop.',
+      'Wire hit at 9:12. NDA lives in the files app. Same lobby as people who still want the old version of you. You keep the volume down on purpose.',
     emotionalStake:
-      'Every person who laughed gets to watch. The singer doesn\'t need their applause — but they want it.',
-    vibes: ['Triumph', 'Chaos', 'Rebellion'],
+      'You outgrew the room and you still love them, but you do not narrate the come-up.',
+    vibes: ['Triumph', 'Rebellion', 'Chaos'],
   },
   {
-    id: 'fugitive-escapist',
-    name: 'The Fugitive Escapist',
-    tagline: 'Driving out of town at 2 AM, burning the rearview, pure adrenaline',
+    id: 'tithes-and-trials',
+    name: 'Gospel Trap / Redemption',
+    tagline: 'Prayer in the driver seat, tithe on the bank app',
     situation:
-      'Engine running, one bag in the trunk, the town limit sign disappearing in the mirror. No destination, only the open highway and the static between radio stations.',
+      'Mama has a court date, you have a session, and the tithe left the account before the weekend. The 808 is low so you can hear yourself think.',
     emotionalStake:
-      'Leaving isn\'t cowardice — it\'s the only honest thing left. The question is whether freedom feels like flying or falling.',
-    vibes: ['Chaos', 'Rebellion', 'Late Night'],
+      'You are trying to break the cycle in the same month you almost become it.',
+    vibes: ['Triumph', 'Heartbreak', 'Intimacy'],
   },
   {
-    id: 'analog-ghost',
-    name: 'The Analog Ghost',
-    tagline: 'Haunted by old memories, finding an artifact, fading connections',
+    id: 'summer-function',
+    name: 'West Coast Bounce / Summer Function',
+    tagline: 'Windows cracked, aux in the console, petty talk',
     situation:
-      'Cleaning out a storage unit and discovering a box of cassette tapes, polaroids, and a matchbook from a bar that closed ten years ago. Each object pulls a different version of the singer back into sharp focus.',
+      'Function starts at 4. Phone on DND until the lot fills. Street etiquette is simple: speak when spoken to, do not perform the block.',
     emotionalStake:
-      'The person they used to be is both a stranger and the most honest version of themselves they\'ve ever known.',
-    vibes: ['Nostalgia', 'Late Night', 'Heartbreak'],
+      'Low-stress flex is the point. If you talking loud, you not with us.',
+    vibes: ['Chaos', 'Rebellion', 'Triumph'],
   },
   {
-    id: 'cynics-spark',
-    name: 'The Cynic\'s Spark',
-    tagline: 'Guard dropped unexpectedly, sudden electric intimacy',
+    id: 'mixed-signals',
+    name: 'The Soft Launch',
+    tagline: 'Everybody else gets posted, your name stays in notes',
     situation:
-      'After years of deflecting every genuine moment with irony, the singer is caught completely off guard by a stranger in a fluorescent-lit diner at 4 AM who says something devastatingly simple and true.',
+      'They soft-launch strangers and hide you in airplane mode. You screenshot the thread, then delete it before you do something you cannot take back.',
     emotionalStake:
-      'The armor they\'ve spent a decade building is useless against one honest conversation. The terror isn\'t falling — it\'s wanting to.',
+      'Casual is the word they use when they still want access.',
     vibes: ['Intimacy', 'Late Night', 'Nostalgia'],
   },
 ];
@@ -110,18 +110,18 @@ interface SensoryAnchor {
 }
 
 const SENSORY_ANCHORS: SensoryAnchor[] = [
-  { text: 'Flickering halogen headlights on rain-slicked asphalt', vibes: ['Late Night', 'Chaos', 'Rebellion'] },
-  { text: 'A muted phone screen lighting up at 3:14 AM', vibes: ['Late Night', 'Heartbreak', 'Intimacy'] },
-  { text: 'Cold morning coffee beside an unopened moving box', vibes: ['Nostalgia', 'Heartbreak'] },
-  { text: 'Dust motes floating across an empty studio floor', vibes: ['Nostalgia', 'Intimacy', 'Triumph'] },
-  { text: 'Bass vibrations rattling the trunk at a red light', vibes: ['Chaos', 'Triumph', 'Rebellion'] },
-  { text: 'A highway rest stop at 3 AM, diesel fumes and a vending machine glow', vibes: ['Late Night', 'Fugitive Escapist' as VibeFocus, 'Chaos'] },
-  { text: 'A voicemail listened to so many times the words have lost meaning', vibes: ['Heartbreak', 'Nostalgia', 'Late Night'] },
-  { text: 'Neon bar sign reflected in a puddle on an empty street', vibes: ['Late Night', 'Intimacy', 'Rebellion'] },
-  { text: 'The specific silence after a door closes for the last time', vibes: ['Heartbreak', 'Nostalgia'] },
-  { text: 'Streetlights strobing past a car window at 90 mph', vibes: ['Chaos', 'Rebellion', 'Triumph'] },
-  { text: 'A crumpled setlist found in a jacket pocket two years later', vibes: ['Nostalgia', 'Triumph'] },
-  { text: 'The blue light of a recording booth bleeding under the door', vibes: ['Triumph', 'Late Night', 'Intimacy'] },
+  { text: 'Lock screen at 4:18 AM with a court date banner', vibes: ['Late Night', 'Heartbreak', 'Intimacy'] },
+  { text: 'Read receipt sitting on seen since 2:07', vibes: ['Heartbreak', 'Intimacy', 'Nostalgia'] },
+  { text: 'Bank app refresh in an apartment lobby', vibes: ['Triumph', 'Heartbreak'] },
+  { text: 'Car console on low while a flight confirmation pings', vibes: ['Chaos', 'Triumph', 'Rebellion'] },
+  { text: 'NDA PDF open in the files app', vibes: ['Triumph', 'Rebellion'] },
+  { text: 'Phone on DND on the passenger seat', vibes: ['Late Night', 'Intimacy', 'Chaos'] },
+  { text: 'Wire confirmation at 9:12 with no caption', vibes: ['Triumph', 'Chaos'] },
+  { text: 'Private story view with no reply', vibes: ['Heartbreak', 'Nostalgia', 'Intimacy'] },
+  { text: 'Tithe leaving the bank app before the weekend', vibes: ['Triumph', 'Intimacy'] },
+  { text: 'Group chat going quiet after the check cleared', vibes: ['Heartbreak', 'Nostalgia', 'Late Night'] },
+  { text: 'Aux in the console, windows cracked at the function', vibes: ['Chaos', 'Rebellion', 'Triumph'] },
+  { text: 'Same lobby, different badge', vibes: ['Triumph', 'Late Night', 'Intimacy'] },
 ];
 
 // ─── Genre Vocabulary & Framing ───────────────────────────────────────────────
@@ -140,52 +140,52 @@ const GENRE_FRAMES: GenreFrame[] = [
     matchIds: ['hiphop', 'trap', 'rap', 'hip-hop', 'hiphop-trap'],
     label: 'Hip-Hop / Soul Trap',
     writingStyle:
-      'Relatable internal conflicts told with unflinching specificity. Loyalty tested by circumstance. Late-night studio confessions. Dual-tone vulnerability — hard on the outside, raw underneath.',
+      'Billboard Rap talk: receipts, DND, court dates, wires, and the people who did not call back. Conversational, no poetry. Dual-tone — hard outside, raw underneath.',
     hookStyle:
-      'Punchy declarative bars with a melodic hook payoff. Short syllable pockets with internal rhyme.',
+      'Punchy bars, strained melodic-rap hook, ad-libs (yeah) (look) (uh). Short pockets, internal rhyme.',
     metatagTemplates: [
-      '[Intro: Trap beat fades in, no vocals — let it breathe]',
-      '[Verse 1: Close-mic spoken delivery, building intensity]',
-      '[Chorus: Melodic hook, layered harmonies, wide stereo]',
-      '[Bridge: Beat drops to half-time, ad-libs only]',
-      '[Outro: Voice-note quality vocal, echo fade]',
+      '[Intro: Trap drums enter, no poetry — just the pocket]',
+      '[Verse 1: Close-mic spoken delivery | (look)]',
+      '[Chorus: [Vocal switch: strained melodic rap] | stacked (yeah)]',
+      '[Bridge: Half-time, ad-libs only]',
+      '[Outro: Voice-note vocal, phone still on DND]',
     ],
   },
   {
     matchIds: ['electronic', 'synthwave', 'edm', 'house', 'techno', 'ambient'],
     label: 'Synthwave / Electronic',
     writingStyle:
-      'Neon-soaked escapism and digital melancholy. Highway drives into the dark. The ache of technology connecting people who feel more disconnected than ever. Pulsating urgency beneath a cool exterior.',
+      'Current club-adjacent Rap/R&B: consoles, flight pings, DND, and cool detachment. No tourist nightlife language. Talk like a chart record.',
     hookStyle:
-      'Anthemic, simple, vowel-heavy. Designed to soar over a synth drop. Emotional directness wrapped in cool detachment.',
+      'Simple vowel hooks, ad-libs (uh) (yeah), designed to sit on a bounce, not a poem.',
     metatagTemplates: [
-      '[Intro: Analog synth pad swell, no percussion]',
-      '[Verse: Processed vocals, robotic yet warm delivery]',
-      '[Drop: Full synthwave beat, wide reverb on vocals]',
-      '[Bridge: Stripped back to arpeggiated synth, raw vocal]',
-      '[Outro: Beat dissolves into white noise and static]',
+      '[Intro: Pad swell, dry talk-up]',
+      '[Verse: Processed but conversational vocal]',
+      '[Drop: Full bounce, (uh) on the snare]',
+      '[Bridge: Stripped console vocal]',
+      '[Outro: Beat drops out, lock screen still lit]',
     ],
   },
   {
     matchIds: ['rnb', 'r&b', 'soul', 'neo-soul', 'neosoul', 'funk'],
     label: 'R&B / Neo-Soul',
     writingStyle:
-      'Slow-burn emotional tension revealed in glimpses. The unsaid living in the pauses between words. Sensual intimacy and unspoken doubts. Rich vocal runs carrying more meaning than the lyrics themselves.',
+      'Modern R&B / toxic soul: read receipts, private stories, lobby small talk, mixed signals. Conversational, specific, no theater language.',
     hookStyle:
-      'Extended, melismatic phrasing. Lyrics that pivot on a single word. The hook rewards a second listen.',
+      'Talk-sing verses, stacked hook, one word that turns the room. (yeah) as punctuation.',
     metatagTemplates: [
       '[Intro: Soft spoken-word, close mic, no effects]',
-      '[Verse: Intimate, breathy vocal, minimal Rhodes]',
-      '[Chorus: Soaring lead with delayed ad-libs]',
-      '[Bridge: Falsetto break, stripped percussion]',
-      '[Outro: Vocal improvisation over fading chord]',
+      '[Verse: Intimate breathy vocal | (uh)]',
+      '[Chorus: Soaring lead with delayed (yeah)]',
+      '[Bridge: Falsetto break, stripped kit]',
+      '[Outro: Voice note over a fading chord]',
     ],
   },
   {
     matchIds: ['rock', 'metal', 'punk', 'grunge', 'alternative', 'indie-rock'],
     label: 'Rock / Metal',
     writingStyle:
-      'Cathartic rebellion and the satisfaction of breaking points. Raw grit with no apology. The body as a battlefield. Uninhibited release that feels like the moment a wave finally crashes.',
+      'Raw grit with no apology. Specific rooms, specific people, specific money. No poetry, no theater.',
     hookStyle:
       'Singalong anthemic choruses. Short, declarative phrases with visceral imagery. Verses that build tension, choruses that explode.',
     metatagTemplates: [
@@ -200,7 +200,7 @@ const GENRE_FRAMES: GenreFrame[] = [
     matchIds: ['gospel-trap', 'gospel', 'soul-sample', 'gospel trap'],
     label: 'Gospel Trap / Soul Sample',
     writingStyle:
-      'Sacred and street intersecting at the crossroads of faith and struggle. Testimony delivered over rolling 808s. The choir and the crowd as one voice. Redemption earned through the grind, not given.',
+      'Testimony over trap drums: tithes, trials, generational wealth, court dates, and the LLC in the same month. Conversational gospel-trap, no play language.',
     hookStyle:
       'Call-and-response payoffs that feel communal. Vocal runs that carry the weight of a church testimony. Hooks that build like a Sunday sermon reaching its crescendo.',
     metatagTemplates: [
@@ -215,7 +215,7 @@ const GENRE_FRAMES: GenreFrame[] = [
     matchIds: ['pop', 'dance', 'k-pop', 'kpop', 'bubblegum', 'synth-pop'],
     label: 'Pop / Dance',
     writingStyle:
-      'Euphoric rush encoded in precision. The magic of a single fleeting moment under strobes stretched into three minutes. Infectious rhythm that bypasses the brain and goes straight to the body.',
+      'High-roller / function energy: aux, lot talk, quiet flex, timestamps. Catchy without tourist cliches.',
     hookStyle:
       'Earworm melodic hooks with maximum repetition. Syllables that match the kick pattern. Imagery that lands in two seconds.',
     metatagTemplates: [
@@ -231,15 +231,15 @@ const GENRE_FRAMES: GenreFrame[] = [
 // ─── Working Title Fragments ──────────────────────────────────────────────────
 
 const TITLE_FRAGMENTS_A = [
-  '3 AM', 'Paper', 'Static', 'Ghost', 'Neon', 'Gravel', 'Signal', 'Echo',
-  'Last Exit', 'Hollow', 'Cold', 'Burning', 'Silver', 'Dark', 'Closed',
-  'Midnight', 'Broken', 'Open', 'Unmarked', 'Cracked',
+  '4:18', 'Read', 'Wire', 'DND', 'Lobby', 'Receipt', 'Quiet', 'Court',
+  'Group Chat', 'Badge', 'Tithe', 'Function', 'Private', 'LLC', 'Seen',
+  'Console', 'Broken', 'Open', 'Unmarked', 'Cracked',
 ];
 
 const TITLE_FRAGMENTS_B = [
-  'Tollbooth', 'Crown', '& Smoke', 'Drive', 'Road', 'Glass', 'Frequency',
-  'Archive', 'Season', 'Light', 'Circuit', 'Hour', 'Reel', 'Mile',
-  'Departure', 'Voltage', 'Thread', 'Current', 'Confession', 'Runway',
+  'Receipts', 'Crown', '& Smoke', 'Date', 'App', 'Glass', 'Leverage',
+  'Archive', 'Season', 'Thread', 'Circuit', 'Hour', 'Reel', 'Badge',
+  'Confirmation', 'Voltage', 'Cycle', 'Current', 'Story', 'Runway',
 ];
 
 // ─── Seeded PRNG (same pattern as harmonicTheoryEngine) ──────────────────────
@@ -293,10 +293,10 @@ function buildHooks(
 ): [string, string] {
   // Hook A — The opening image (grounded in sensory anchor)
   const hookATemplates = [
-    `${anchor.text} / That's where I left the version of me that still believed`,
-    `Started the engine at midnight, didn't even check the map / ${anchor.text}`,
-    `There's a light on in your window and I'm still in the parking lot / ${anchor.text}`,
-    `${anchor.text} / I'm running every conversation back at half the speed`,
+    `${anchor.text} / (look) that's the part I don't post`,
+    `Phone on DND, I still pulled up / ${anchor.text}`,
+    `I sat in the lobby like I had an appointment / ${anchor.text}`,
+    `${anchor.text} / I'm running the thread back at half speed (yeah)`,
   ];
   // Hook B — The emotional pivot (drawn from archetype's stake)
   const hookBTemplates = [

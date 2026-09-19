@@ -1,4 +1,4 @@
-// Lyric generation data banks — rhyme families, tone vocab, structure templates, cues
+﻿// Lyric generation data banks â€” rhyme families, tone vocab, structure templates, cues
 
 export type RhymeScheme = 'AABB' | 'ABAB' | 'AAAA' | 'ABCB' | 'AABBCCDD' | 'Complex' | 'Free';
 export type Tone = 'poetic' | 'direct' | 'aggressive' | 'nostalgic' | 'playful';
@@ -24,7 +24,7 @@ export const STRUCTURE_TEMPLATES: StructureTemplate[] = [
   {
     id: 'standard-pop',
     name: 'Standard Pop',
-    blurb: 'Intro → Verses → Pre-Chorus → Chorus repeats → Bridge → Outro',
+    blurb: 'Intro â†’ Verses â†’ Pre-Chorus â†’ Chorus repeats â†’ Bridge â†’ Outro',
     sections: [
       { kind: 'Intro', label: 'Intro' },
       { kind: 'Verse', label: 'Verse 1' },
@@ -40,7 +40,7 @@ export const STRUCTURE_TEMPLATES: StructureTemplate[] = [
   {
     id: 'edm',
     name: 'EDM / Electronic',
-    blurb: 'Build → Drop → Breakdown → Drop again',
+    blurb: 'Build â†’ Drop â†’ Breakdown â†’ Drop again',
     sections: [
       { kind: 'Intro', label: 'Intro' },
       { kind: 'Build-up', label: 'Build-up' },
@@ -81,7 +81,7 @@ export const STRUCTURE_TEMPLATES: StructureTemplate[] = [
   {
     id: 'cinematic',
     name: 'Cinematic Arc',
-    blurb: 'Atmospheric intro → verse builds → orchestral swell → breakdown → triumphant finale',
+    blurb: 'Atmospheric intro â†’ verse builds â†’ orchestral swell â†’ breakdown â†’ triumphant finale',
     sections: [
       { kind: 'Intro', label: 'Intro' },
       { kind: 'Verse', label: 'Verse 1' },
@@ -96,7 +96,7 @@ export const STRUCTURE_TEMPLATES: StructureTemplate[] = [
   {
     id: 'neo-soul',
     name: 'Neo-Soul / R&B',
-    blurb: 'Intro → Verse → Chorus → Verse → Chorus → Vocal Run / Bridge → Ad-lib Outro',
+    blurb: 'Intro â†’ Verse â†’ Chorus â†’ Verse â†’ Chorus â†’ Vocal Run / Bridge â†’ Ad-lib Outro',
     sections: [
       { kind: 'Intro', label: 'Intro' },
       { kind: 'Verse', label: 'Verse 1' },
@@ -110,7 +110,7 @@ export const STRUCTURE_TEMPLATES: StructureTemplate[] = [
   {
     id: 'cinematic-trailer',
     name: 'Cinematic / Trailer',
-    blurb: 'Minimal ambient intro → tension build → climactic crescendo → percussion drop → outro',
+    blurb: 'Minimal ambient intro â†’ tension build â†’ climactic crescendo â†’ percussion drop â†’ outro',
     sections: [
       { kind: 'Intro', label: 'Minimal Ambient Intro' },
       { kind: 'Build-up', label: 'Tension Build' },
@@ -165,7 +165,7 @@ export const GENRE_THEMES: Record<string, string[]> = {
   hiphop: [
     'Reflections on street-corner chess games, gritty winter subway rides, and surviving the hustle.',
     'Coming up from nothing, turning basement studio sessions into a movement the whole city feels.',
-    'A letter to the old block — who stayed, who left, and who never made it home.',
+    'A letter to the old block â€” who stayed, who left, and who never made it home.',
   ],
   rnb: [
     'Late-night incense burning by an open window, untangling complicated romantic attachments over lukewarm tea.',
@@ -190,7 +190,7 @@ export const GENRE_THEMES: Record<string, string[]> = {
   metal: [
     'A descent into the infernal depths, where chains rattle and the throne of bone awaits.',
     'Standing at the edge of the abyss, screaming defiance into the void that tried to swallow you.',
-    'A battlefield aftermath — smoke, silence, and the slow march of the surviving.',
+    'A battlefield aftermath â€” smoke, silence, and the slow march of the surviving.',
   ],
   electronic: [
     'Losing yourself on a packed dancefloor at 4am, where the bass becomes your heartbeat.',
@@ -251,7 +251,7 @@ export const REGIONAL_FLOWS: RegionalFlow[] = [
 
 // ---- Vocal Archetypes & Timbre Personas ----
 // pillLabel is shown in the UI (may include a style nickname).
-// promptTags / cadence / performanceTags are acoustic descriptors — never celebrity names in compiled output.
+// promptTags / cadence / performanceTags are acoustic descriptors â€” never celebrity names in compiled output.
 export type VocalArchetype = {
   id: string;
   pillLabel: string;
@@ -598,7 +598,7 @@ export const NARRATIVE_THEMES: NarrativeTheme[] = [
     promptTheme:
       'Melodic Pain & Survivor Guilt. The bag came in but the group chat went quiet. Unreturned calls, a court date on the lock screen at 4:18 AM, DND still on, bank app refresh that does not fix who you lost. Conversational Rap/R&B, no poetry language.',
     slang: ['on DND', 'left on read', 'the bag', 'group chat', 'court date', 'trust issues', 'I made it out'],
-    cadenceRules: 'Strained melodic rap on the hook, tighter pocket in the verse, ad-libs (yeah) (look) (uh) every 4–8 bars.',
+    cadenceRules: 'Strained melodic rap on the hook, tighter pocket in the verse, ad-libs (yeah) (look) (uh) every 4â€“8 bars.',
     personaTags: ['[Vocal switch: strained melodic rap]', '[Close-mic confession]', '(yeah)', '(look)'],
     deliveryDirectives: ['[Ad-lib: yeah]', '[Vocal switch: strained melodic rap]', '[Whispered]'],
     regionalFlows: ['Southern / Dirty South / Trap'],
@@ -638,7 +638,7 @@ You not here and that check don't cover it
       'Toxic Situationship & Read Receipts. Seen at 2:07, replied at 11:41. Private story views, car console glow, apartment lobby small talk that is not small. Mixed signals, no poetry, current R&B conversation.',
     slang: ['read receipts', 'private story', 'mixed signals', 'situationship', 'left on seen', 'soft launch'],
     cadenceRules: 'Breathy verse, stacked hook, talk-sing asides. Drop (uh) and (yeah) on offbeats.',
-    personaTags: ['[Smooth R&B — Intimate Delivery]', '[Vocal switch: talk-sing]', '(uh)', '(yeah)'],
+    personaTags: ['[Smooth R&B â€” Intimate Delivery]', '[Vocal switch: talk-sing]', '(uh)', '(yeah)'],
     deliveryDirectives: ['[Ad-lib: yeah]', '[Harmonies]', '[Falsetto]'],
     regionalFlows: ['West Coast G-Funk'],
     sampleLyrics: `[Intro]
@@ -733,7 +733,7 @@ Break the cycle or I become the cycle (look)
 I'm still in trial but the blessing hit
 I put ten percent where the rent used to sit
 If I make it out, we all eating off this
-Don't clap yet — we still in the thick
+Don't clap yet â€” we still in the thick
 
 [Verse 2]
 Generational talk in a two-bedroom
@@ -785,338 +785,16 @@ I got one charger and a cooler in the back
   },
 ];
 
-export const RHYME_KEYS_PLACEHOLDER_DO_NOT_USE = [
-    category: 'Sci-Fi / Dystopian',
-    description: 'High-tech dystopia, neon rain on wet pavement, digital ghosts, escaping the grid.',
-    promptTheme: 'Late-Night Cyberpunk Odyssey, neon rain, wet pavement reflections, digital ghosts, escaping the system',
-    sampleLyrics: `[Intro]
-Rain falling on electric glass
-Reflections of the grid fading fast
-
-[Verse 1]
-Chrome streetlights shimmer on wet asphalt
-Shadows moving fast through the dark vault
-Scanning digital ghosts in the neon haze
-Lost inside the sprawling circuit maze
-
-[Pre-Chorus]
-Signal locked on the skyline border
-Breaking free from the digital order
-
-[Chorus]
-Cyberpunk odyssey running through the dark
-Electric pulse leaving a persistent spark
-We ride the neon highway into night
-Escaping the grid into blinding light
-
-[Verse 2]
-Siren echoes ring across concrete spires
-Heartbeats sync with holographic fires
-No turning back as the firewall falls
-Unshackled spirits beyond city walls
-
-[Bridge]
-Data streams dissolving in the midnight air
-Fingers on the wheel with no time to spare
-
-[Chorus]
-Cyberpunk odyssey running through the dark
-Electric pulse leaving a persistent spark
-We ride the neon highway into night
-Escaping the grid into blinding light
-
-[Outro]
-Fade into neon horizon
-Midnight transmission complete`,
-  },
-  {
-    id: 'heartbreak-redemption',
-    title: 'Heartbreak & Redemption',
-    category: 'Emotional / Drama',
-    description: 'Rain-slicked pavement, fading photographs, midnight confessions, emotional healing, moving forward.',
-    promptTheme: 'Heartbreak & Redemption, rain-slicked streets, fading photographs, midnight confession, emotional healing',
-    sampleLyrics: `[Intro]
-Quiet shadows falling across empty floor
-Fading memories lingering by the door
-
-[Verse 1]
-Rain-slicked pavement under streetlight glow
-Fading photographs of a love we used to know
-I held the silence while the world turned cold
-Tracing every promise that we used to hold
-
-[Pre-Chorus]
-Pieces of yesterday scattered in the dark
-Searching through ashes for a single spark
-
-[Chorus]
-Through heartbreak and redemption I am finding my way
-Leaving the storm behind at break of day
-Tears turn to rivers and the river runs clear
-Stronger than the shadow of my deepest fear
-
-[Verse 2]
-Midnight confession whispered to the wind
-Forgiving every place where we used to bend
-I pack the memories in an old suitcase
-Stepping out forward to a brand new space
-
-[Bridge]
-No more looking back at what used to be
-Surrendering the pain so my soul breathes free
-
-[Chorus]
-Through heartbreak and redemption I am finding my way
-Leaving the storm behind at break of day
-Tears turn to rivers and the river runs clear
-Stronger than the shadow of my deepest fear
-
-[Outro]
-Sunrise breaking through morning clouds
-Walking free and standing proud`,
-  },
-  {
-    id: 'high-stakes-heist',
-    title: 'High-Stakes Heist',
-    category: 'Action / Thriller',
-    description: 'Ticking clock, vault blueprints, shadows in alleyways, silent getaway, split-second escape.',
-    promptTheme: 'High-Stakes Heist, ticking clock, vault blueprints, alleyway shadows, silent getaway, split-second escape',
-    sampleLyrics: `[Intro]
-Digital clock ticking three two one
-Shadows in the alleyway before the rising sun
-
-[Verse 1]
-Vault blueprints memorized line by line
-Silent footsteps moving right on time
-Lasers flickering in the marble hall
-Invisibility draped against the wall
-
-[Pre-Chorus]
-Fingers on the dial as the tumblers click
-Heartbeats racing on a split-second tick
-
-[Chorus]
-High-stakes heist in the dead of night
-Slipping through the shadows out of sight
-One chance to break the golden lock
-Running fast against the ticking clock
-
-[Verse 2]
-Diamond glinting in the velvet pouch
-Alleyway getaway crouch by crouch
-Siren sirens wailing three blocks away
-Van engines roaring for a clean getaway
-
-[Bridge]
-Red emergency lights spinning in the dark
-Wheels burning rubber leaving smoke and spark
-
-[Chorus]
-High-stakes heist in the dead of night
-Slipping through the shadows out of sight
-One chance to break the golden lock
-Running fast against the ticking clock
-
-[Outro]
-Escape complete into the morning fog
-Shadows vanishing into silence`,
-  },
-  {
-    id: 'nostalgic-roadtrip',
-    title: 'Nostalgic Road Trip',
-    category: 'Feel-Good / Nostalgia',
-    description: 'Endless highway, summer wind, cassette tapes on dashboard, memories on the radio, sunset horizon.',
-    promptTheme: 'Nostalgic Road Trip, endless highway, summer wind, cassette tapes on dashboard, sunset horizon',
-    sampleLyrics: `[Intro]
-Windows down feeling the summer breeze
-Dusty highway winding through palm trees
-
-[Verse 1]
-Cassette tapes piled on the dashboard leather
-Singing along in the warm open weather
-Milestone markers flying right on by
-Golden sun setting in a violet sky
-
-[Pre-Chorus]
-Old favorite chorus playing on the radio
-Remembering the places where we used to go
-
-[Chorus]
-Nostalgic road trip under open skies
-Endless horizon reflected in our eyes
-Miles roll behind us like a movie reel
-Freedom is the only thing we want to feel
-
-[Verse 2]
-Diner coffee cups at a midnight stop
-Laughter ringing out till the temperatures drop
-Map spread open across the hood at night
-Chasing every star glowing silver bright
-
-[Bridge]
-No destination needed just the open road
-Lifting off the weight of every heavy load
-
-[Chorus]
-Nostalgic road trip under open skies
-Endless horizon reflected in our eyes
-Miles roll behind us like a movie reel
-Freedom is the only thing we want to feel
-
-[Outro]
-Highway tail lights fading in sunset glow
-Riding on forever slow and easy`,
-  },
-  {
-    id: 'triumph-adversity',
-    title: 'Triumph Over Adversity',
-    category: 'Inspirational / Anthem',
-    description: 'Rising from dust, breaking chains, unshakeable willpower, victorious horizon, unstoppable spirit.',
-    promptTheme: 'Triumph Over Adversity, rising from dust, breaking chains, unshakeable willpower, victorious horizon',
-    sampleLyrics: `[Intro]
-Heavy footsteps rising from the ground
-Unbroken spirit making a thunderous sound
-
-[Verse 1]
-They said the mountain was too steep to climb
-They counted down the seconds on a broken time
-I took the bruises and I bore the scars
-Turning every shadow into shining stars
-
-[Pre-Chorus]
-Chain links shattering under pressure and grit
-Burning with a fire that will never quit
-
-[Chorus]
-Triumph over adversity standing tall
-Rising higher than the giant wall
-From the ashes of the hardest night
-We emerge victorious in golden light
-
-[Verse 2]
-Doubt was a phantom whispering in my head
-Now I walk with courage in my stride instead
-Every obstacle became a stepping stone
-Claiming back the future that is mine alone
-
-[Bridge]
-Iron willpower that can never break
-Standing firm for every dream at stake
-
-[Chorus]
-Triumph over adversity standing tall
-Rising higher than the giant wall
-From the ashes of the hardest night
-We emerge victorious in golden light
-
-[Outro]
-Victory flag flying high and free
-Unstoppable for eternity`,
-  },
-  {
-    id: 'cosmic-exploration',
-    title: 'Cosmic Exploration & Deep Space',
-    category: 'Sci-Fi / Atmospheric',
-    description: 'Starships in orbit, galaxy lights, silent cosmos, voyage into the unknown.',
-    promptTheme: 'Cosmic Exploration, starships in orbit, galaxy lights, silent cosmos, voyage into the unknown',
-    sampleLyrics: `[Intro]
-Starlight gleaming across the cockpit glass
-Silent celestial dust as centuries pass
-
-[Verse 1]
-Solar sails unfolding in the solar wind
-Leaving Earth behind where the blue horizon thinned
-Supernova clusters glowing red and gold
-Navigating mysteries untold
-
-[Pre-Chorus]
-G-force pulsing through the hull plate steel
-Gravity dissolving into dreamlike feel
-
-[Chorus]
-Cosmic exploration into deep unknown
-Voyaging across the stellar zone
-Beyond the solar realm where galaxies ignite
-Sailing through eternity in starlight
-
-[Verse 2]
-Nebula clouds swirling in violet blue
-Charting new worlds that no one ever knew
-Transmission echoing back across the void
-Harmonies of planets gently deployed
-
-[Bridge]
-Zero gravity drifting free and light
-Boundless wonder shining in eternal night
-
-[Chorus]
-Cosmic exploration into deep unknown
-Voyaging across the stellar zone
-Beyond the solar realm where galaxies ignite
-Sailing through eternity in starlight
-
-[Outro]
-Sub-light engines pulsing slow and clear
-Sailing through the cosmos without fear`,
-  },
-  {
-    id: 'midnight-jazz-secret',
-    title: 'Midnight Jazz Club Secret',
-    category: 'Romance / Mystery',
-    description: 'Smoky lounge, velvet curtains, whispered secrets, lingering glances, hidden romance.',
-    promptTheme: 'Midnight Jazz Club Secret, smoky lounge, velvet curtains, whispered secrets, lingering glances',
-    sampleLyrics: `[Intro]
-Soft candlelight flickering in velvet shade
-Whispered conversations before memories fade
-
-[Verse 1]
-Smoky lounge corner behind velvet drape
-Escaping from the city in a secret shape
-Eye contact holding across the dimly lit room
-Rose petals scattering subtle sweet perfume
-
-[Pre-Chorus]
-Glass clinking softly as the clock strikes two
-Sensing every secret meant for me and you
-
-[Chorus]
-Midnight jazz club secret in the quiet dark
-Lingering glance igniting a quiet spark
-Two souls meeting in the velvet shade
-A romantic memory that will never fade
-
-[Verse 2]
-Whispered promises under amber glow
-Rhythms of the night moving sweet and slow
-Shadows intertwining as the hour grows late
-Stepping together into destiny and fate
-
-[Bridge]
-No words spoken just the unspoken truth
-Timeless passion timeless youth
-
-[Chorus]
-Midnight jazz club secret in the quiet dark
-Lingering glance igniting a quiet spark
-Two souls meeting in the velvet shade
-A romantic memory that will never fade
-
-[Outro]
-Candle burning down to a gentle ember
-A midnight secret we will always remember`,
-  },
-];
-
 export const RHYME_KEYS = Object.keys(RHYME_FAMILIES);
 
 // ---- Tone-flavored vocabulary & imagery ----
 export const TONE_VOCAB: Record<Tone, { openers: string[]; imagery: string[]; connectors: string[] }> = {
   poetic: {
     openers: [
-      'Beneath the', 'Across the', 'Where shadows', 'A whispered', 'The velvet', 'Like embers', 'Through corridors of', 'In the cathedral of',
+      'I keep', 'You left', 'Phone on', 'Look I', '4:18 and', 'I told', 'We still', 'If I call',
     ],
-    imagery: ['silver moonlight', 'velvet silence', 'falling embers', 'distant echoes', 'shattered glass', 'woven dreams', 'gilded dust', 'paper skies', 'porcelain hearts', 'tide of stars', 'threadbare clouds', 'hollow cathedrals', 'marble wings', 'ink-stained dawn', 'frozen breath', 'lacquered memory'],
-    connectors: ['and', 'where', 'while', 'as', 'though', 'beneath', 'within', 'between'],
+    imagery: ['the lock screen', 'the lobby', 'read receipts', 'the bank app', 'the console', 'DND', 'the group chat', 'a court date', 'the wire', 'the files app', 'the two-bedroom', 'the charger', 'the badge', 'the calendar'],
+    connectors: ['and', 'but', 'so', 'cause', 'when', 'if', 'now', 'then'],
   },
   direct: {
     openers: [
@@ -1143,12 +821,12 @@ export const TONE_VOCAB: Record<Tone, { openers: string[]; imagery: string[]; co
     openers: [
       'Hey now', 'So what if', 'Tick-tock', 'Candy-coated', 'Pick it up', 'Bounce with', 'Wiggle the', 'Slip into',
     ],
-    imagery: ['the groove', 'sugar rush', 'a disco ball', 'neon sneakers', 'bubblegum', 'the dance floor', 'a high five', 'a wink', 'sprinkles', 'the weekend', 'a piggyback', 'the punchline', 'a daydream', 'cartoon hearts'],
+    imagery: ['the groove', 'sugar rush', 'the aux', 'the function', 'bubblegum', 'the lot', 'a high five', 'a wink', 'sprinkles', 'the weekend', 'a piggyback', 'the punchline', 'a daydream', 'cartoon hearts'],
     connectors: ['and', 'so', 'then', 'plus', 'but', 'hey', 'okay', 'woo'],
   },
 };
 
-// ---- Theme → keyword extraction (very light) ----
+// ---- Theme â†’ keyword extraction (very light) ----
 export type ThemeKeywords = {
   nouns: string[];
   adjectives: string[];
@@ -1187,22 +865,22 @@ export function extractKeywords(theme: string): ThemeKeywords {
 // Spanish / French / Japanese / Arabic lyric phrase scaffolding (lightweight)
 export const LANG_PHRASES: Record<Lang, { intro: string[]; verse: string[]; chorus: string[] }> = {
   en: { intro: ['Yeah...', 'Oh...', 'Mmm...'], verse: ['I remember', 'Walking through', 'You told me'], chorus: ['So I say', 'Tonight we', 'Nothing can stop us'] },
-  es: { intro: ['Sí...', 'Oh...', 'Mmm...'], verse: ['Recuerdo', 'Caminando por', 'Me dijiste'], chorus: ['Y yo digo', 'Esta noche', 'Nada nos detiene'] },
-  fr: { intro: ['Oui...', 'Oh...', 'Mmm...'], verse: ['Je me souviens', 'En marchant dans', 'Tu m\'as dit'], chorus: ['Alors je dis', 'Ce soir nous', 'Rien ne nous arrête'] },
-  ja: { intro: ['そう...', 'ああ...', 'んん...'], verse: ['覚えている', '歩きながら', '君は言った'], chorus: ['だから言うよ', '今夜僕ら', '何も止められない'] },
-  ar: { intro: ['نعم...', 'آه...', 'مم...'], verse: ['أتذكر', 'أمشي عبر', 'أخبرتني'], chorus: ['فأقول', 'الليلة نحن', 'لا شيء يوقفنا'] },
+  es: { intro: ['SÃ­...', 'Oh...', 'Mmm...'], verse: ['Recuerdo', 'Caminando por', 'Me dijiste'], chorus: ['Y yo digo', 'Esta noche', 'Nada nos detiene'] },
+  fr: { intro: ['Oui...', 'Oh...', 'Mmm...'], verse: ['Je me souviens', 'En marchant dans', 'Tu m\'as dit'], chorus: ['Alors je dis', 'Ce soir nous', 'Rien ne nous arrÃªte'] },
+  ja: { intro: ['ãã†...', 'ã‚ã‚...', 'ã‚“ã‚“...'], verse: ['è¦šãˆã¦ã„ã‚‹', 'æ­©ããªãŒã‚‰', 'å›ã¯è¨€ã£ãŸ'], chorus: ['ã ã‹ã‚‰è¨€ã†ã‚ˆ', 'ä»Šå¤œåƒ•ã‚‰', 'ä½•ã‚‚æ­¢ã‚ã‚‰ã‚Œãªã„'] },
+  ar: { intro: ['Ù†Ø¹Ù…...', 'Ø¢Ù‡...', 'Ù…Ù…...'], verse: ['Ø£ØªØ°ÙƒØ±', 'Ø£Ù…Ø´ÙŠ Ø¹Ø¨Ø±', 'Ø£Ø®Ø¨Ø±ØªÙ†ÙŠ'], chorus: ['ÙØ£Ù‚ÙˆÙ„', 'Ø§Ù„Ù„ÙŠÙ„Ø© Ù†Ø­Ù†', 'Ù„Ø§ Ø´ÙŠØ¡ ÙŠÙˆÙ‚ÙÙ†Ø§'] },
 };
 
 // Spanish rhyme families (small subset for es support)
 export const ES_RHYME_FAMILIES: Record<string, string[]> = {
-  ar: ['amar', 'cantar', 'volar', 'soñar', 'llorar', 'esperar', 'encontrar', 'cambiar', 'amar', 'mar', 'lugar', 'penitencia', 'querer'],
+  ar: ['amar', 'cantar', 'volar', 'soÃ±ar', 'llorar', 'esperar', 'encontrar', 'cambiar', 'amar', 'mar', 'lugar', 'penitencia', 'querer'],
   er: ['querer', 'perder', 'volver', 'morder', 'comer', 'leer', 'saber', 'tener', 'poner', 'ser', 'ver', 'crecer'],
-  ir: ['vivir', 'sentir', 'reír', 'partir', 'huir', 'abrir', 'decir', 'seguir', 'fugir', 'resistir'],
+  ir: ['vivir', 'sentir', 'reÃ­r', 'partir', 'huir', 'abrir', 'decir', 'seguir', 'fugir', 'resistir'],
 };
 
 // French rhyme families (small subset)
 export const FR_RHYME_FAMILIES: Record<string, string[]> = {
   ar: ['amour', 'jour', 'toujours', 'alors', 'corps', 'sort', 'port', 'mort', 'tort', 'd\'or', 'encore', 'bord', 'nord', 'accord'],
-  er: ['aimer', 'rêver', 'dancer', 'pleurer', 'chanter', 'tomber', 'rester', 'passer', 'oublier', 'essayer'],
+  er: ['aimer', 'rÃªver', 'dancer', 'pleurer', 'chanter', 'tomber', 'rester', 'passer', 'oublier', 'essayer'],
   ir: ['fuir', 'courir', 'partir', 'mourir', 'ouvrir', 'souffrir', 'rien', 'bien', 'ancien', 'loin'],
 };

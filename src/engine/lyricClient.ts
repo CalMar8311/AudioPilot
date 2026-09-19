@@ -14,6 +14,7 @@ import { GENRES, INSTRUMENTS, VOCAL_TYPES, MOOD_TAGS } from '@/data/catalogs';
 import type { PromptState } from '@/engine/usePromptEngine';
 import type { FusedLyricContext } from '@/engine/styleFusion';
 import { fusedDeliveryDirectives, fusedLyricContext } from '@/engine/styleFusion';
+import { CRITICAL_LYRIC_INSTRUCTION } from '@/data/lyricGenerator';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -73,7 +74,7 @@ export async function generateLyricsViaEdge(params: GenerateParams): Promise<Gen
       },
       signal: params.signal,
       body: JSON.stringify({
-        theme,
+        theme: `${theme}\n\n${CRITICAL_LYRIC_INSTRUCTION}`,
         scheme,
         tone,
         lang,

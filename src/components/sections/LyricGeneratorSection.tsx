@@ -5,7 +5,7 @@ import { FileMusic, Sparkles, Copy, RefreshCw, Wand2, Plus, Type, Gauge, Chevron
 import {
   STRUCTURE_TEMPLATES, TONE_OPTIONS, LANG_OPTIONS, RHYME_OPTIONS,
   RHYME_SCHEME_IDS, REGIONAL_FLOWS, DELIVERY_DIRECTIVES, RHYME_FAMILIES,
-  randomThemeForGenre, NARRATIVE_THEMES, type NarrativeTheme,
+  randomThemeForGenre, NARRATIVE_THEMES, NARRATIVE_CATEGORY_ORDER, type NarrativeTheme,
   type RhymeScheme, type Tone, type Lang, type StructureId, type StructureTemplate,
 } from '@/data/lyricBanks';
 import {
@@ -408,11 +408,21 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
 
   const applyNarrativeConcept = (narrative: NarrativeTheme) => {
     setSelectedNarrativeId(narrative.id);
-    setTheme(narrative.promptTheme);
-    const cleaned = cleanLyricText(narrative.sampleLyrics);
+    setTheme(
+      [
+        narrative.promptTheme,
+        `Cadence: ${narrative.cadenceRules}`,
+        `Slang to use naturally: ${narrative.slang.join(', ')}`,
+        `Persona tags: ${narrative.personaTags.join(' ')}`,
+      ].join('\n'),
+    );
+    setDeliveryDirectives(prev => Array.from(new Set([...prev, ...narrative.deliveryDirectives])));
+    setRegionalFlows(prev => Array.from(new Set([...prev, ...narrative.regionalFlows])));
+    const tagged = [narrative.personaTags.join('\n'), narrative.sampleLyrics].filter(Boolean).join('\n');
+    const cleaned = cleanLyricText(tagged);
     update('lyrics', cleaned);
     addRecentPrompt(cleaned);
-    showToast(`Applied story arc: ${narrative.title}`);
+    showToast(`Applied ${narrative.category} — ${narrative.title}`);
   };
 
   const handleRandomNarrativeConcept = () => {
@@ -1228,12 +1238,16 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
             className="w-full bg-ink-850/80 border border-ink-700/80 rounded-lg px-3 py-2 text-xs text-ink-100 focus:outline-none focus:border-neon-cyan"
           >
             <option value="" className="bg-ink-900 text-ink-400">
-              -- Select a Narrative Story Concept --
+              -- Select a commercial Rap / R&amp;B concept --
             </option>
-            {NARRATIVE_THEMES.map(nt => (
-              <option key={nt.id} value={nt.id} className="bg-ink-900 text-ink-100">
-                {nt.title} ({nt.category})
-              </option>
+            {NARRATIVE_CATEGORY_ORDER.map(category => (
+              <optgroup key={category} label={`[${category}]`} className="bg-ink-900 text-ink-300">
+                {NARRATIVE_THEMES.filter(nt => nt.category === category).map(nt => (
+                  <option key={nt.id} value={nt.id} className="bg-ink-900 text-ink-100">
+                    {nt.title}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
 
@@ -1246,6 +1260,14 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
                 </span>
               </div>
               <p className="text-ink-400 text-[10px] leading-relaxed">{selectedNarrative.description}</p>
+              <p className="text-[10px] text-ink-500 leading-relaxed">{selectedNarrative.cadenceRules}</p>
+              <div className="flex flex-wrap gap-1">
+                {selectedNarrative.slang.slice(0, 6).map(tag => (
+                  <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded bg-ink-800/80 border border-ink-700/50 text-ink-300">
+                    {tag}
+                  </span>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => applyNarrativeConcept(selectedNarrative)}

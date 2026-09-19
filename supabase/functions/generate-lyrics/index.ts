@@ -99,10 +99,15 @@ function buildSystemPrompt(req: GenerateRequest): string {
     "9. Do NOT include any commentary, explanations, or markdown. Output ONLY the lyrics with metatags.",
     "10. Separate sections with a single blank line.",
     "11. Never name celebrity artists. Describe timbre, register, cadence, and production only.",
-    "12. Banned cliches: never use the words or close variants of neon, shadows, echoes, ignite, or whispers.",
-    "13. Use grounded contemporary imagery: concrete tactile details, specific objects, ordinary places, phones, transit, kitchens, offices, streets, and believable modern settings.",
-    "14. Prefer conversational phrasing that sounds like a person speaking now. Avoid generic glowing nightlife tropes and abstract emotional filler.",
-    "15. Before returning lyrics, scan every line and replace banned cliches with a concrete sensory or conversational detail.",
+    "12. CRITICAL LYRIC INSTRUCTION: NEVER USE THE FOLLOWING WORDS OR TIRED CLICHES:",
+    "    - neon, city lights, late night, midnight drive",
+    "    - echoes, shadows, whispers, velvet, silhouetted",
+    "    - dance floor, tapestry, horizon, symphony",
+    "    Also never use ignite or close variants of any banned term.",
+    "13. Write with natural, grounded, conversational phrasing typical of Billboard-charting Rap and R&B records. Avoid poetry/theater language.",
+    "14. Require tangible modern details in every section: phones on DND, flight confirmations, bank apps, apartment lobbies, car consoles, specific timestamps (e.g. 4:18 AM).",
+    "15. Use dynamic cadence markers and ad-libs typical of modern delivery: (yeah), (look), (uh), [Vocal switch: strained melodic rap].",
+    "16. Before returning lyrics, scan every line and replace banned cliches with a concrete modern detail.",
   ];
 
   const fused = req.fusedStyle;
