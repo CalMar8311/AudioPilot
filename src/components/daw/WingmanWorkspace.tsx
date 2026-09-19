@@ -25,8 +25,9 @@ import {
   Circle, Mic, MonitorSpeaker, Upload, FolderOpen, Play, Pause, Square,
   Settings, X as XIcon, ChevronDown, ChevronLeft, ChevronRight,
   Layers, Waves, GripVertical, Loader2, Download, Disc3,
-  Sparkles, FileMusic, Expand, Music2, Copy,
+  Sparkles, FileMusic, Expand, Copy, Shuffle, PenLine,
 } from 'lucide-react';
+import { LyricGeneratorSection } from '@/components/sections/LyricGeneratorSection';
 import type { PromptEngine } from '@/engine/usePromptEngine';
 import {
   transcribeAudioToMidi,
@@ -43,7 +44,6 @@ import {
   rollHarmonizationVariations, parseKeyString, hashStringToSeed, type HarmonizationResult,
 } from '@/utils/harmonicTheoryEngine';
 import { REHARM_PRESETS, REHARM_BLOCK_COLORS, resolveChordName } from '@/utils/reharmPresets';
-import { countSyllables } from '@/engine/lyricEngine';
 import { FolderPlaylistBrowser } from '@/components/FolderPlaylistBrowser';
 import { WaveformCanvas } from '@/components/daw/WaveformCanvas';
 
@@ -358,7 +358,10 @@ interface WingmanWorkspaceProps {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: WingmanWorkspaceProps) {
-  const { audioState, setAudioFile, setAudioAnalysis, setAudioIsAnalyzing, showToast, state } = eng;
+  const {
+    audioState, setAudioFile, setAudioAnalysis, setAudioIsAnalyzing, showToast, state,
+    surpriseMe, surprising, isLyricGenerating,
+  } = eng;
   const { audioFile, analysis } = audioState;
 
   // ── Recording ──────────────────────────────────────────────────────────
@@ -858,19 +861,6 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
   const [lyricsDockOpen, setLyricsDockOpen] = useState(false);
   const lyricsBlocks = useMemo(() => parseDawBlocks(state.lyrics), [state.lyrics]);
   const structuralBlocks = useMemo(() => lyricsBlocks.filter(b => b.label !== '__pre__'), [lyricsBlocks]);
-  const sectionSyllables = useMemo(() => {
-    const map: Record<string, number> = {};
-    structuralBlocks.forEach(b => {
-      const sum = b.body.split('\n')
-        .filter(l => l.trim() && !l.startsWith('['))
-        .reduce((acc, line) => acc + countSyllables(line), 0);
-      map[b.id] = sum;
-    });
-    return map;
-  }, [structuralBlocks]);
-  const moodPills = useMemo(() => state.moods.slice(0, 3).map(id => id.replace(/-/g, ' ')), [state.moods]);
-  const keyPill = analysis?.detectedKey ?? (state.musicalKeys[0] ?? '');
-  const genrePill = state.genres[0]?.replace(/-/g, ' ') ?? '';
 
   const copyPrompt = async () => {
     try { await navigator.clipboard.writeText(eng.stylePrompt); } catch { /* clipboard unavailable */ }
@@ -975,6 +965,26 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-dock-border bg-dock-bg text-[10px] font-mono font-bold text-neon-cyan whitespace-nowrap">
             {effectiveBpm} BPM
           </span>
+          <button
+            type="button"
+            onClick={() => { setLyricsDockOpen(true); void surpriseMe(); }}
+            disabled={surprising || isLyricGenerating}
+            title="Randomize genre blueprint, narrative story, and fill the lyric canvas"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-neon-magenta/40 bg-neon-magenta/10 text-[10px] font-semibold text-neon-magenta hover:bg-neon-magenta/20 transition whitespace-nowrap disabled:opacity-60"
+          >
+            {(surprising || isLyricGenerating)
+              ? <Loader2 className="w-3 h-3 animate-spin" />
+              : <Shuffle className="w-3 h-3" />}
+            {surprising ? 'Surprising…' : isLyricGenerating ? 'Writing…' : 'Surprise Me'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setLyricsDockOpen(true)}
+            title="Open Lyrics Studio"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-neon-cyan/40 bg-neon-cyan/10 text-[10px] font-semibold text-neon-cyan hover:bg-neon-cyan/20 transition whitespace-nowrap"
+          >
+            <PenLine className="w-3 h-3" /> Lyrics Studio
+          </button>
         </div>
 
         {/* Transport */}
@@ -1021,15 +1031,18 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
         </div>
       </header>
 
-      {/* Folder browser — absolute overlay so it never eats into the fixed deck heights */}
-      {folderOpen && (
-        <div className="absolute top-12 left-0 right-0 z-30 border-b border-white/5 bg-dock-surface max-h-72 overflow-y-auto shadow-2xl">
-          <FolderPlaylistBrowser
-            onSendToAnalyzer={(f) => { void processAudioFile(f); setFolderOpen(false); }}
-            onShowToast={showToast}
-          />
-        </div>
-      )}
+      {/* Folder browser stays mounted so the transport + last track survive overlay close. */}
+      <div
+        className={`absolute top-12 left-0 right-0 z-30 border-b border-white/5 bg-dock-surface max-h-72 overflow-y-auto shadow-2xl ${
+          folderOpen ? '' : 'hidden'
+        }`}
+        aria-hidden={!folderOpen}
+      >
+        <FolderPlaylistBrowser
+          onSendToAnalyzer={(f) => { void processAudioFile(f); setFolderOpen(false); }}
+          onShowToast={showToast}
+        />
+      </div>
 
       {/* ══════════════ Deck stack — fills remaining viewport, no page-level scroll ══════════════ */}
       <div className="flex-1 min-h-0 flex flex-col gap-2 px-3 py-2 overflow-hidden">
@@ -1465,88 +1478,27 @@ export function WingmanWorkspace({ eng, onOpenSettings, onOpenStyleStudio }: Win
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {structuralBlocks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Music2 className="w-10 h-10 text-ink-700" />
-              <p className="text-[11px] text-ink-500 italic text-center leading-relaxed">
-                Generate lyrics in the<br />Lyric Canvas to see them<br />as structured cards here.
-              </p>
-              <button
-                type="button"
-                onClick={onOpenStyleStudio}
-                className="mt-1 text-[11px] px-3 py-1.5 rounded-lg border border-neon-magenta/40 bg-neon-magenta/5 text-neon-magenta hover:bg-neon-magenta/10 transition"
-              >
-                Open Style Studio →
-              </button>
-            </div>
-          ) : (
-            structuralBlocks.map(block => {
-              const syllCount = sectionSyllables[block.id] ?? 0;
-              const bodyLines = block.body.split('\n').filter(l => l.trim() && !l.startsWith('['));
-              return (
-                <div
-                  key={block.id}
-                  className={`rounded-2xl border overflow-hidden transition-shadow ${
-                    block.isChorus
-                      ? 'border-fuchsia-500/30 bg-fuchsia-950/20 shadow-[0_0_10px_rgba(217,70,239,0.08)]'
-                      : 'border-dock-border bg-dock-card'
-                  }`}
-                >
-                  <div className={`flex items-center gap-2 px-3 py-2 border-b ${
-                    block.isChorus ? 'border-fuchsia-500/20 bg-fuchsia-900/20' : 'border-dock-border bg-dock-hover/50'
-                  }`}>
-                    <span className={`text-[12px] font-bold flex-1 ${block.isChorus ? 'text-fuchsia-300' : 'text-neon-cyan'}`}>
-                      {block.label}
-                    </span>
-                    {syllCount > 0 && (
-                      <span className="w-6 h-6 rounded-full bg-neon-magenta/20 border border-neon-magenta/40 text-neon-magenta text-[9px] font-bold flex items-center justify-center shrink-0">
-                        {syllCount > 99 ? '99+' : syllCount}
-                      </span>
-                    )}
-                  </div>
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-dock-border bg-dock-hover/30">
+          <button
+            type="button"
+            onClick={() => void surpriseMe()}
+            disabled={surprising || isLyricGenerating}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold border border-neon-magenta/40 bg-neon-magenta/10 text-neon-magenta hover:bg-neon-magenta/15 disabled:opacity-60 transition"
+          >
+            {(surprising || isLyricGenerating) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shuffle className="w-3.5 h-3.5" />}
+            Surprise Me
+          </button>
+          <button
+            type="button"
+            onClick={onOpenStyleStudio}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold border border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/15 transition"
+          >
+            <Sparkles className="w-3.5 h-3.5" /> Full Studio
+          </button>
+        </div>
 
-                  <div className="px-3 py-2.5">
-                    {bodyLines.length > 0 ? (
-                      <div className="space-y-1">
-                        {bodyLines.slice(0, 6).map((line, li) => (
-                          <p key={li} className="text-[12px] text-ink-200 leading-relaxed font-mono truncate">{line}</p>
-                        ))}
-                        {bodyLines.length > 6 && (
-                          <p className="text-[10px] text-ink-500 italic">+{bodyLines.length - 6} more lines</p>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-ink-600 italic">Empty section</p>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1 px-3 pb-2.5">
-                    {moodPills.slice(0, 2).map(mood => (
-                      <span key={mood} className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300 capitalize">
-                        {mood}
-                      </span>
-                    ))}
-                    {genrePill && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-violet-500/10 border border-violet-500/30 text-violet-300 capitalize">
-                        {genrePill}
-                      </span>
-                    )}
-                    {keyPill && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                        {keyPill}
-                      </span>
-                    )}
-                    {block.isChorus && (
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                        Vocal Focus
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
+        <div className="flex-1 overflow-y-auto p-2">
+          <LyricGeneratorSection eng={eng} />
         </div>
 
         <div className="shrink-0 border-t border-dock-border bg-dock-card px-3 py-2 flex items-center gap-2">

@@ -1965,6 +1965,15 @@ export function LyricGeneratorSection({ eng }: { eng: PromptEngine }) {
                         />
                       )}
                       <span className="text-[9px] text-ink-500 shrink-0">{lineCount}L</span>
+                      <span
+                        className="shrink-0 min-w-[1.35rem] h-5 px-1 rounded-full bg-neon-magenta/20 border border-neon-magenta/40 text-neon-magenta text-[9px] font-bold flex items-center justify-center"
+                        title="Syllable count for this section"
+                      >
+                        {displayBody
+                          .split('\n')
+                          .filter(l => l.trim() && !l.startsWith('['))
+                          .reduce((acc, line) => acc + countSyllables(line), 0) || 0}
+                      </span>
 
                       {/* ▲ Move up */}
                       <button

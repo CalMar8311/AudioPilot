@@ -4,7 +4,7 @@
 // keyboard's Up/Down arrows — without re-opening the folder picker.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen, ListMusic, Search, SkipBack, SkipForward, PlayCircle, ArrowRightCircle } from 'lucide-react';
+import { FolderOpen, ListMusic, Search, SkipBack, SkipForward, PlayCircle, ArrowRightCircle, Play, Pause } from 'lucide-react';
 
 interface PlaylistEntry {
   name: string;
@@ -20,6 +20,13 @@ interface FolderPlaylistBrowserProps {
 
 const isSupportedAudioName = (name: string) => /\.(mp3|wav)$/i.test(name);
 
+function formatClock(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderPlaylistBrowserProps) {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistEntry[]>([]);
@@ -29,6 +36,9 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
   const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
   const [isLoadingFolder, setIsLoadingFolder] = useState(false);
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+  const [playheadSec, setPlayheadSec] = useState(0);
+  const [durationSec, setDurationSec] = useState(0);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   // Points at whichever track-list row is currently active so Up/Down arrow navigation can
@@ -166,12 +176,8 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
       setFolderName(dirHandle.name);
       setPlaylist(entries);
       setSearchQuery('');
+      // Keep the last loaded track + transport mounted until the user clicks a new file.
       setCurrentIndex(-1);
-      setCurrentFile(null);
-      setCurrentTrackUrl((prevUrl) => {
-        if (prevUrl) URL.revokeObjectURL(prevUrl);
-        return null;
-      });
 
       if (entries.length === 0) {
         notify(`No .mp3 or .wav files found in "${dirHandle.name}".`);
@@ -211,8 +217,25 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
     onSendToAnalyzer?.(currentFile);
   };
 
+  const hasTrack = Boolean(currentTrackUrl);
+  const transportDisabled = !hasTrack || isLoadingTrack;
+
+  const handleTogglePreview = () => {
+    const el = audioRef.current;
+    if (!el || !hasTrack) return;
+    if (el.paused) void el.play().catch(() => undefined);
+    else el.pause();
+  };
+
+  const handleSeekPreview = (value: number) => {
+    const el = audioRef.current;
+    if (!el || !hasTrack) return;
+    el.currentTime = value;
+    setPlayheadSec(value);
+  };
+
   return (
-    <div className="rounded-xl border border-ink-700/60 bg-ink-950/40 p-3.5 space-y-3">
+    <div className="rounded-xl border border-ink-700/60 bg-ink-950/40 p-3.5 flex flex-col min-h-[220px] gap-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] uppercase tracking-widest text-ink-400 font-semibold flex items-center gap-1.5">
           <ListMusic className="w-3.5 h-3.5 text-neon-cyan" />
@@ -302,58 +325,94 @@ export function FolderPlaylistBrowser({ onSendToAnalyzer, onShowToast }: FolderP
               })}
             </div>
           )}
-
-          {/* Transport controls: Previous / Next (traverse the filtered list) + native audio previewer */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePrevious}
-              disabled={filteredPlaylist.length === 0 || isLoadingTrack}
-              className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1 transition disabled:opacity-50"
-              title="Previous track (↑)"
-            >
-              <SkipBack className="w-3.5 h-3.5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={filteredPlaylist.length === 0 || isLoadingTrack}
-              className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1 transition disabled:opacity-50"
-              title="Next track (↓)"
-            >
-              <SkipForward className="w-3.5 h-3.5" />
-            </button>
-
-            {onSendToAnalyzer && currentFile && (
-              <button
-                type="button"
-                onClick={handleSendToAnalyzer}
-                className="btn btn-primary !py-1.5 !px-2.5 !text-xs flex items-center gap-1.5 ml-auto"
-                title="Send this track to the analyzer for audition & analysis"
-              >
-                <ArrowRightCircle className="w-3.5 h-3.5" />
-                Use This Track
-              </button>
-            )}
-          </div>
-
-          {currentTrackUrl && (
-            <div className="space-y-1">
-              <p className="text-[10px] text-ink-400 truncate">
-                Now previewing: <span className="text-ink-100 font-semibold">{currentFile?.name}</span>
-              </p>
-              <audio
-                ref={audioRef}
-                controls
-                src={currentTrackUrl}
-                onEnded={handleTrackEnded}
-                className="w-full h-9"
-              />
-            </div>
-          )}
         </>
       )}
+
+      {/* Permanently mounted transport — dimmed when no track is loaded */}
+      <div className={`mt-auto shrink-0 space-y-2 pt-1 border-t border-ink-800/60 ${transportDisabled ? 'opacity-50' : ''}`}>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handlePrevious}
+            disabled={filteredPlaylist.length === 0 || isLoadingTrack}
+            className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1 transition disabled:opacity-50"
+            title="Previous track (↑)"
+          >
+            <SkipBack className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleTogglePreview}
+            disabled={transportDisabled}
+            className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10 flex items-center gap-1 transition disabled:opacity-50"
+            title={isPreviewPlaying ? 'Pause' : 'Play'}
+          >
+            {isPreviewPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleNext}
+            disabled={filteredPlaylist.length === 0 || isLoadingTrack}
+            className="btn btn-ghost !py-1.5 !px-2.5 !text-xs border border-ink-700/60 hover:border-neon-cyan/60 text-ink-200 hover:text-neon-cyan flex items-center gap-1 transition disabled:opacity-50"
+            title="Next track (↓)"
+          >
+            <SkipForward className="w-3.5 h-3.5" />
+          </button>
+
+          <p className="text-[10px] text-ink-400 truncate flex-1 min-w-0">
+            {currentFile ? (
+              <>Now previewing: <span className="text-ink-100 font-semibold">{currentFile.name}</span></>
+            ) : (
+              'No track selected'
+            )}
+          </p>
+
+          {onSendToAnalyzer && (
+            <button
+              type="button"
+              onClick={handleSendToAnalyzer}
+              disabled={!currentFile}
+              className="btn btn-primary !py-1.5 !px-2.5 !text-xs flex items-center gap-1.5 disabled:opacity-40"
+              title="Send this track to the analyzer for audition & analysis"
+            >
+              <ArrowRightCircle className="w-3.5 h-3.5" />
+              Use This Track
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-ink-500 w-9 shrink-0">{formatClock(playheadSec)}</span>
+          <input
+            type="range"
+            min={0}
+            max={durationSec || 0}
+            step={0.1}
+            value={Math.min(playheadSec, durationSec || 0)}
+            disabled={transportDisabled}
+            onChange={(e) => handleSeekPreview(Number(e.target.value))}
+            className="flex-1 accent-cyan-400 h-1.5 disabled:cursor-not-allowed"
+            aria-label="Track timeline"
+          />
+          <span className="text-[10px] font-mono text-ink-500 w-9 shrink-0 text-right">{formatClock(durationSec)}</span>
+        </div>
+
+        <audio
+          ref={audioRef}
+          src={currentTrackUrl ?? undefined}
+          onEnded={handleTrackEnded}
+          onTimeUpdate={() => setPlayheadSec(audioRef.current?.currentTime ?? 0)}
+          onLoadedMetadata={() => {
+            setDurationSec(audioRef.current?.duration ?? 0);
+            setPlayheadSec(audioRef.current?.currentTime ?? 0);
+          }}
+          onPlay={() => setIsPreviewPlaying(true)}
+          onPause={() => setIsPreviewPlaying(false)}
+          className="sr-only"
+        />
+      </div>
     </div>
   );
 }
