@@ -5,13 +5,39 @@ export interface LyricTemplateOptions {
   structure?: 'pop' | 'hiphop' | 'ballad';
 }
 
-export const BANNED_CLICHES = ['neon', 'shadows', 'echoes', 'ignite', 'whispers'] as const;
+export const BANNED_CLICHES = [
+  'neon',
+  'city lights',
+  'late night',
+  'midnight drive',
+  'echoes',
+  'shadows',
+  'whispers',
+  'velvet',
+  'silhouetted',
+  'dance floor',
+  'tapestry',
+  'horizon',
+  'symphony',
+  'ignite',
+] as const;
+
+export const CRITICAL_LYRIC_INSTRUCTION = [
+  'CRITICAL LYRIC INSTRUCTION: NEVER USE THE FOLLOWING WORDS OR TIRED CLICHES:',
+  '- neon, city lights, late night, midnight drive',
+  '- echoes, shadows, whispers, velvet, silhouetted',
+  '- dance floor, tapestry, horizon, symphony',
+  'Write with natural, grounded, conversational phrasing typical of Billboard-charting Rap and R&B records. Avoid poetry/theater language.',
+  'Require tangible modern details: phones on DND, flight confirmations, bank apps, apartment lobbies, car consoles, specific timestamps (e.g. 4:18 AM).',
+  'Use modern cadence markers and ad-libs: (yeah), (look), (uh), [Vocal switch: strained melodic rap].',
+].join('\n');
 
 export const GROUNDED_LYRIC_INSTRUCTIONS = [
-  'Use grounded, contemporary imagery: concrete tactile details, specific objects, ordinary places, and believable modern settings.',
-  'Prefer conversational phrasing that sounds like a person speaking now; avoid generic glowing nightlife imagery and abstract emotional filler.',
-  'Strictly ban these cliches and their close variants: neon, shadows, echoes, ignite, whispers.',
-  'Before returning lyrics, scan every line and replace any banned cliche with a concrete sensory or conversational detail.',
+  CRITICAL_LYRIC_INSTRUCTION,
+  'Use grounded contemporary Rap and R&B imagery: receipts, unread messages, court dates, lobbies, consoles, wire alerts, DND, and ordinary rooms.',
+  'Prefer conversational phrasing that sounds like a person talking on a record right now.',
+  `Strictly ban these cliches and their close variants: ${BANNED_CLICHES.join(', ')}.`,
+  'Before returning lyrics, scan every line and replace any banned cliche with a concrete modern detail.',
 ].join(' ');
 
 export function normalizeLyricMood(mood?: string): string {

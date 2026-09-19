@@ -561,14 +561,32 @@ export const RHYME_FAMILIES: Record<string, string[]> = {
   ire: ['fire', 'wire', 'desire', 'higher', 'tire', 'hire', 'inspire', 'require', 'acquire', 'choir', 'liar', 'flyer', 'pliers', 'suppliers', 'buyers', 'prior', 'entire', 'attire', 'retire', 'aspire', 'empire', 'vampire', 'require'],
 };
 
-// ---- Rich Narrative Themes & Story Arcs Bank ----
+// ---- Commercial Rap / R&B Narrative Catalog ----
+export type NarrativeCategory =
+  | 'Trap & Melodic Drill'
+  | 'Modern R&B / Toxic Soul'
+  | 'Soul Sample / Gospel Trap'
+  | 'High-Rollers / Club Bounce';
+
+export const NARRATIVE_CATEGORY_ORDER: NarrativeCategory[] = [
+  'Trap & Melodic Drill',
+  'Modern R&B / Toxic Soul',
+  'Soul Sample / Gospel Trap',
+  'High-Rollers / Club Bounce',
+];
+
 export type NarrativeTheme = {
   id: string;
   title: string;
-  category: string;
+  category: NarrativeCategory;
   description: string;
   promptTheme: string;
   sampleLyrics: string;
+  slang: string[];
+  cadenceRules: string;
+  personaTags: string[];
+  deliveryDirectives: string[];
+  regionalFlows: string[];
 };
 
 export const NARRATIVE_THEMES: NarrativeTheme[] = [
