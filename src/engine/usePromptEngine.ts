@@ -26,6 +26,15 @@ import {
   compileArtistBlendPrompt,
   compileGenreBlendPrompt,
 } from '@/engine/styleFusion';
+import {
+  MAIN_GENRE_CATEGORIES,
+  flattenSubgenreThemes,
+  findGenreCategory,
+  buildSubgenrePrompt,
+  buildSubgenreLyricSeed,
+  buildSunoStyleLine,
+  type SubgenreTheme,
+} from '@/data/genreThemeCatalog';
 
 const STORAGE_KEY = 'n93_prompt_state_v1';
 const PRESETS_KEY = 'n93_user_presets_v1';
@@ -81,7 +90,13 @@ export type SurpriseTheme = {
   lyricMetatags?: string;
   /** When true, LyricGeneratorSection will auto-trigger lyric generation immediately after applying this theme. */
   autoGenerateLyrics?: boolean;
+  mainGenreId?: string;
+  subgenreId?: string;
 };
+
+const DEFAULT_MAIN_GENRE_ID = MAIN_GENRE_CATEGORIES[0]?.id ?? 'hiphop-rap';
+const DEFAULT_SUBGENRE: SubgenreTheme =
+  MAIN_GENRE_CATEGORIES[0]?.subgenres[0] ?? flattenSubgenreThemes()[0];
 
 export type AudioReferenceState = {
   audioFile: File | null;
@@ -577,6 +592,9 @@ export function usePromptEngine() {
   const [recentPrompts, setRecentPrompts] = useState<PromptSnapshot[]>(() => loadSnapshots(RECENT_KEY));
   const [toast, setToast] = useState<string | null>(null);
   const [surpriseTheme, setSurpriseTheme] = useState<SurpriseTheme | null>(null);
+  const [activeMainGenreId, setActiveMainGenreId] = useState<string>(DEFAULT_MAIN_GENRE_ID);
+  const [activeSubgenre, setActiveSubgenre] = useState<SubgenreTheme>(DEFAULT_SUBGENRE);
+  const [themeRollNonce, setThemeRollNonce] = useState(0);
   // Exposed so Header can disable the "Surprise Me" button while lyrics are being written.
   const [isLyricGenerating, setIsLyricGenerating] = useState(false);
   // Incremented by reset() so that App.tsx can key local-state components off this value,
@@ -902,6 +920,9 @@ export function usePromptEngine() {
 
     // 3. Clear AI-generated surprise theme (consumed by LyricGeneratorSection).
     setSurpriseTheme(null);
+    setActiveMainGenreId(DEFAULT_MAIN_GENRE_ID);
+    setActiveSubgenre(DEFAULT_SUBGENRE);
+    setThemeRollNonce(0);
 
     // 4. Bump resetKey so App.tsx can remount local-state sections
     //    (SectionArrangementBuilder, AudioRemixStudio, FolderPlaylistBrowser, AudioMidiExtractorPanel)
@@ -1054,16 +1075,56 @@ export function usePromptEngine() {
         // Network error — use the fallback theme string above.
       }
 
-      // 5. Apply, including subgenres in the allowlist so they survive normalizePromptState.
-      setState(prev => normalizePromptState({ ...prev, ...freshState }));
+      // 5. Roll a new Theme / Narrative subgenre (never the currently highlighted one).
+      const allSubgenres = flattenSubgenreThemes();
+      const availablePool = allSubgenres.filter(s => s.id !== activeSubgenre.id);
+      const randomChoice = (availablePool.length ? availablePool : allSubgenres)[
+        Math.floor(Math.random() * (availablePool.length ? availablePool.length : allSubgenres.length))
+      ] ?? DEFAULT_SUBGENRE;
+      const parentCategory =
+        findGenreCategory(randomChoice.genreId) ??
+        MAIN_GENRE_CATEGORIES.find(cat => cat.subgenres.some(s => s.id === randomChoice.id));
+      if (parentCategory) setActiveMainGenreId(parentCategory.id);
+      setActiveSubgenre(randomChoice);
+      setThemeRollNonce(n => n + 1);
+
+      const narrativeTheme = buildSubgenrePrompt(randomChoice, parentCategory?.title ?? randomChoice.genreTitle);
+      const lyricSeed = cleanLyricText(buildSubgenreLyricSeed(randomChoice));
+      const keyLabel = (prevKey?: string[]) =>
+        (prevKey && prevKey.length ? prevKey.join(', ') : 'C Major');
+
+      // 6. Apply, including subgenres in the allowlist so they survive normalizePromptState.
+      setState(prev => {
+        const next = normalizePromptState({
+          ...prev,
+          ...freshState,
+          lyrics: lyricSeed || prev.lyrics,
+        });
+        return {
+          ...next,
+          stylePromptOverride: buildSunoStyleLine(
+            randomChoice,
+            parentCategory?.title ?? randomChoice.genreTitle,
+            { bpm: next.bpm || freshState.bpm, key: keyLabel(next.musicalKeys) },
+          ),
+        };
+      });
       // autoGenerateLyrics: true tells LyricGeneratorSection to immediately begin
       // writing lyrics as soon as it consumes this theme, without a second click.
-      setSurpriseTheme({ theme, structureId, rhymeScheme, autoGenerateLyrics: true });
-      showToast(`Surprise! ${primaryGenreLabel}${fusion.subgenres.length ? ' × ' + fusion.subgenres.join(' + ') : ''}`);
+      setSurpriseTheme({
+        theme: `${narrativeTheme}\n\nStory brief: ${theme}`,
+        structureId,
+        rhymeScheme,
+        autoGenerateLyrics: true,
+        mainGenreId: parentCategory?.id,
+        subgenreId: randomChoice.id,
+        lyricMetatags: lyricSeed,
+      });
+      showToast(`Surprise! ${parentCategory?.title ?? primaryGenreLabel} → ${randomChoice.label}`);
     } finally {
       setSurprising(false);
     }
-  }, [showToast]);
+  }, [showToast, activeSubgenre.id]);
 
   const pushHistory = useCallback(() => {
     setHistory(prev => [state, ...prev].slice(0, 24));
@@ -1116,6 +1177,7 @@ export function usePromptEngine() {
     randomize, reset, resetKey,
     randomizeGenres, randomizeVocals, randomizeArtistArchetypes, randomizeInstruments, randomizeMoodTempo,
     applyBlueprint, surpriseMe, surprising, surpriseTheme, setSurpriseTheme,
+    activeMainGenreId, setActiveMainGenreId, activeSubgenre, setActiveSubgenre, themeRollNonce,
     isLyricGenerating, setIsLyricGenerating,
     pushHistory, loadHistoryItem,
     insertLyricTag,

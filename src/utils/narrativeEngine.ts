@@ -370,3 +370,17 @@ export const VIBE_OPTIONS: { id: VibeFocus; emoji: string }[] = [
   { id: 'Intimacy', emoji: '🕯️' },
   { id: 'Rebellion', emoji: '🔥' },
 ];
+
+export type {
+  MainGenreCategory,
+  SubgenreTheme,
+} from '@/data/genreThemeCatalog';
+export {
+  MAIN_GENRE_CATEGORIES,
+  flattenSubgenreThemes,
+  findGenreCategory,
+  findSubgenreTheme,
+  buildSubgenrePrompt,
+  buildSubgenreLyricSeed,
+  buildSunoStyleLine,
+} from '@/data/genreThemeCatalog';
